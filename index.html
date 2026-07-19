@@ -85,6 +85,34 @@
 
     #btn-add:active { transform: scale(0.96); }
 
+    #btn-remove {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(12px);
+      color: #fff;
+      font-size: 22px;
+      line-height: 1;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s, border-color 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #btn-remove:hover:not(:disabled) {
+      background: rgba(255, 80, 80, 0.25);
+      border-color: rgba(255, 100, 100, 0.6);
+      transform: scale(1.1);
+    }
+    #btn-remove:active:not(:disabled) { transform: scale(0.96); }
+    #btn-remove:disabled {
+      opacity: 0.3;
+      cursor: default;
+      pointer-events: none;
+    }
+
     /* Intent label toggle */
     #btn-labels {
       border-radius: 10px;
@@ -130,6 +158,7 @@
 <div id="ui">
   <div class="ui-badge" id="shape-count">Shapes: 1</div>
   <button id="btn-labels">labels on</button>
+  <button id="btn-remove" title="Remove shape">−</button>
   <button id="btn-add" title="Add shape">+</button>
 </div>
 
@@ -729,13 +758,37 @@ const ShapeFactory = (() => {
     createLabel(mesh);
 
     document.getElementById('shape-count').textContent = `Shapes: ${shapes.length}`;
+    updateRemoveButton();
+  }
+
+  /* ── Remove a shape ──────────────────────────────────────────────────────── */
+  function removeShape(mesh) {
+    scene.remove(mesh);
+    const idx = shapes.indexOf(mesh);
+    if (idx !== -1) shapes.splice(idx, 1);
+    intentEngine.remove(mesh);
+    removeLabel(mesh);
+    mesh.geometry.dispose();
+    mesh.material.dispose();
+    document.getElementById('shape-count').textContent = 'Shapes: ' + shapes.length;
+    updateRemoveButton();
+  }
+
+  function updateRemoveButton() {
+    document.getElementById('btn-remove').disabled = shapes.length <= 1;
   }
 
   // Spawn the initial shape
   spawnShape();
+  updateRemoveButton();
 
   /* ── UI ───────────────────────────────────────────────────────────────── */
   document.getElementById('btn-add').addEventListener('click', spawnShape);
+
+  document.getElementById('btn-remove').addEventListener('click', () => {
+    if (shapes.length <= 1) return;
+    removeShape(shapes[shapes.length - 1]); // LIFO: remove most recently added
+  });
 
   const btnLabels = document.getElementById('btn-labels');
   btnLabels.addEventListener('click', () => {
@@ -761,6 +814,27 @@ const ShapeFactory = (() => {
   document.addEventListener('mousemove', resetCursorTimer);
   document.addEventListener('touchstart', resetCursorTimer);
   resetCursorTimer();
+
+  /* -- Click-to-delete via raycasting -- */
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+
+  renderer.domElement.addEventListener('click', (event) => {
+    // Don't raycast if click was on UI
+    if (event.target !== renderer.domElement) return;
+
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(shapes);
+
+    if (intersects.length > 0) {
+      // Don't delete the last shape
+      if (shapes.length <= 1) return;
+      removeShape(intersects[0].object);
+    }
+  });
 
   /* ── Resize handler ───────────────────────────────────────────────────── */
   function onResize() {
