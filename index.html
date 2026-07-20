@@ -460,6 +460,58 @@ const IntentRegistry = (() => {
     bounce(shape.position, state.vel, bounds);
   });
 
+  /* FLYING COW
+     Extra intent: graceful swooping/gliding flight in a lazy figure-8
+     (lemniscate) on X/Z with a gentle sinusoidal up-down glide on Y.
+     Slower and floatier than wander/chase/flee -- a bird-like soaring path
+     visually distinct from every other registered intent. */
+  _behaviors.set('flying cow', (state, shape, _all, bounds, dt) => {
+    if (state.cowPhase === undefined) {
+      state.cowPhase   = Math.random() * Math.PI * 2;
+      state.cowAnchor  = {
+        x: (Math.random() - 0.5) * bounds.x * 0.5,
+        y: (Math.random() - 0.5) * bounds.y * 0.4,
+        z: (Math.random() - 0.5) * bounds.z * 0.4,
+      };
+      state.cowAmpXZ  = 2.0 + Math.random() * 1.5;
+      state.cowAmpY   = 0.8 + Math.random() * 0.6;
+      state.cowSpeed  = 0.25 + Math.random() * 0.15; // slow, graceful glide
+      state.cowFreqY  = 0.6 + Math.random() * 0.3;
+    }
+
+    state.cowPhase += dt * state.cowSpeed;
+    const t = state.cowPhase;
+
+    // Lazy figure-8 (lemniscate of Bernoulli) on X/Z; gentle sinusoidal
+    // up-down glide on Y -- a soaring, swooping path.
+    const denom = 1 + Math.sin(t) * Math.sin(t);
+    const tx = state.cowAnchor.x + (state.cowAmpXZ * Math.cos(t)) / denom;
+    const tz = state.cowAnchor.z + (state.cowAmpXZ * Math.sin(t) * Math.cos(t)) / denom;
+    const ty = state.cowAnchor.y + Math.sin(t * state.cowFreqY) * state.cowAmpY;
+
+    const prevX = shape.position.x, prevY = shape.position.y, prevZ = shape.position.z;
+
+    // Slow, floaty ease toward the swoop target (much gentler than other intents)
+    shape.position.x += (tx - shape.position.x) * 0.025;
+    shape.position.y += (ty - shape.position.y) * 0.025;
+    shape.position.z += (tz - shape.position.z) * 0.025;
+
+    // Track velocity for bounce + consistency if intent switches
+    state.vel.x = (shape.position.x - prevX) / dt;
+    state.vel.y = (shape.position.y - prevY) / dt;
+    state.vel.z = (shape.position.z - prevZ) / dt;
+
+    bounce(shape.position, state.vel, bounds);
+
+    // Bank gently into the glide direction for a convincing soar, and
+    // swish the tail if this shape is a cow mesh.
+    shape.rotation.z = Math.sin(t) * 0.25;
+    if (shape.userData && shape.userData.geoName === 'cow') {
+      const tail = shape.getObjectByName('tail');
+      if (tail) tail.rotation.x = Math.sin(t * 4) * 0.5;
+    }
+  });
+
   /* ── Public API ──────────────────────────────────────────────────────── */
   return {
     /**
@@ -646,6 +698,143 @@ const ShapeFactory = (() => {
 })();
 
 
+/* COW FACTORY -- createCow(bounds)
+   Builds a small, cartoonish "flying cow" easter-egg mesh out of Three.js
+   primitives, returned as a THREE.Group. Built at a comfortable working
+   scale then shrunk down so it reads as visibly smaller than the regular
+   ShapeFactory shapes (which run ~0.5-0.9 units). */
+
+function createCow(bounds) {
+  const group = new THREE.Group();
+
+  const white  = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, metalness: 0.05 });
+  const pink   = new THREE.MeshStandardMaterial({ color: 0xffb6c9, roughness: 0.5, metalness: 0.05 });
+  const black  = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5, metalness: 0.1 });
+  const brown  = new THREE.MeshStandardMaterial({ color: 0x4a2f1c, roughness: 0.6, metalness: 0.05 });
+  const gold   = new THREE.MeshStandardMaterial({ color: 0xffd23f, roughness: 0.3, metalness: 0.5 });
+  const gray   = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.4, metalness: 0.1, transparent: true, opacity: 0.85 });
+
+  /* Body -- horizontal oval barrel */
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 2.0, 16), white);
+  body.rotation.z = Math.PI / 2;
+  body.position.set(0, 0, 0);
+  group.add(body);
+
+  /* Head -- oversized sphere at the front of the body */
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.62, 20, 16), white);
+  head.position.set(1.35, 0.25, 0);
+  group.add(head);
+
+  /* Eyes -- big goofy white spheres with black pupils */
+  const eyeOffsets = [-0.32, 0.32];
+  eyeOffsets.forEach(zOff => {
+    const eyeWhite = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), white);
+    eyeWhite.position.set(1.75, 0.5, zOff);
+    group.add(eyeWhite);
+
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), black);
+    pupil.position.set(1.9, 0.53, zOff);
+    group.add(pupil);
+  });
+
+  /* Ears -- small pink cones on the sides of the head */
+  [-1, 1].forEach(side => {
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.35, 8), pink);
+    ear.position.set(1.15, 0.75, side * 0.55);
+    ear.rotation.x = side * 0.6;
+    group.add(ear);
+  });
+
+  /* Snout -- flattened pink sphere on the front of the head */
+  const snout = new THREE.Mesh(new THREE.SphereGeometry(0.32, 14, 10), pink);
+  snout.position.set(1.9, 0.1, 0);
+  snout.scale.set(0.7, 0.65, 1.0);
+  group.add(snout);
+
+  /* Nostrils (tiny black dots on snout) */
+  [-0.12, 0.12].forEach(z => {
+    const nostril = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), black);
+    nostril.position.set(2.12, 0.1, z);
+    group.add(nostril);
+  });
+
+  /* Horns -- two small cones on top of the head */
+  [-1, 1].forEach(side => {
+    const horn = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.28, 8), gray);
+    horn.position.set(1.3, 0.95, side * 0.28);
+    horn.rotation.z = -side * 0.35;
+    group.add(horn);
+  });
+
+  /* Legs -- four stubby cylinders underneath the body */
+  const legPositions = [
+    [-0.7, -0.95, 0.55], [-0.7, -0.95, -0.55],
+    [0.7, -0.95, 0.55],  [0.7, -0.95, -0.55],
+  ];
+  legPositions.forEach(([x, y, z]) => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.7, 8), white);
+    leg.position.set(x, y, z);
+    group.add(leg);
+
+    /* Hooves -- small dark cylinders at the bottom of each leg */
+    const hoof = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.18, 8), black);
+    hoof.position.set(x, y - 0.44, z);
+    group.add(hoof);
+  });
+
+  /* Tail -- thin, slightly curved cylinder at the back (tagged for animation) */
+  const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.09, 0.9, 6), brown);
+  tail.name = 'tail';
+  tail.position.set(-1.15, -0.15, 0);
+  tail.rotation.z = Math.PI / 2.6;
+  group.add(tail);
+
+  /* Wings -- tiny comical angel wings, flat boxes on the back/sides */
+  [-1, 1].forEach(side => {
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.06, 0.5), gray);
+    wing.position.set(-0.1, 0.55, side * 0.85);
+    wing.rotation.z = side * 0.15;
+    wing.rotation.y = side * 0.3;
+    group.add(wing);
+  });
+
+  /* Spots -- 3-5 flattened dark ovals on the body surface */
+  const spotCount = 3 + Math.floor(Math.random() * 3); // 3-5
+  for (let i = 0; i < spotCount; i++) {
+    const spot = new THREE.Mesh(new THREE.SphereGeometry(0.25 + Math.random() * 0.15, 10, 8), brown);
+    const angle = Math.random() * Math.PI * 2;
+    const along = (Math.random() - 0.5) * 1.6;
+    spot.position.set(along, Math.sin(angle) * 0.75, Math.cos(angle) * 0.75);
+    spot.scale.set(0.5, 1, 1);
+    spot.lookAt(spot.position.clone().multiplyScalar(2));
+    group.add(spot);
+  }
+
+  /* Bell -- small golden sphere dangling under the neck with a strap */
+  const strap = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.35, 6), brown);
+  strap.position.set(1.05, -0.15, 0);
+  group.add(strap);
+
+  const bell = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), gold);
+  bell.position.set(1.05, -0.42, 0);
+  group.add(bell);
+
+  /* Udders -- pink sphere cluster on the underside of the body */
+  const udderOffsets = [[-0.25, -0.25], [0.25, -0.25], [-0.25, 0.25], [0.25, 0.25]];
+  udderOffsets.forEach(([x, z]) => {
+    const udder = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), pink);
+    udder.position.set(x, -0.95, z);
+    group.add(udder);
+  });
+
+  /* Scale the whole cow down so it reads as noticeably smaller than the
+     regular ShapeFactory shapes (which are built at ~0.5-0.9 units). */
+  group.scale.set(0.32, 0.32, 0.32);
+
+  return group;
+}
+
+
 /* ═══════════════════════════════════════════════════════════════════════════
    SECTION 4 — MAIN APPLICATION
    ───────────────────────────────────────────────────────────────────────────
@@ -716,6 +905,8 @@ const ShapeFactory = (() => {
   const shapes = [];    // THREE.Mesh[]
   const labels = [];    // { el: HTMLDivElement, mesh: THREE.Mesh }[]
   let showLabels = true;
+  let cowClickCount = 0;
+  let cowClickThreshold = Math.floor(Math.random() * 5) + 3; // random 3-7 inclusive
 
   /* ── Label creation ───────────────────────────────────────────────────── */
   function createLabel(mesh) {
@@ -749,13 +940,41 @@ const ShapeFactory = (() => {
 
   /* ── Spawn a shape ────────────────────────────────────────────────────── */
   function spawnShape() {
-    const intentNames = IntentRegistry.names;
-    const { mesh, intent } = ShapeFactory.create(intentNames, BOUNDS);
+    const intentNames = IntentRegistry.names.filter(n => n !== 'flying cow');
 
-    scene.add(mesh);
-    shapes.push(mesh);
-    intentEngine.assign(mesh, intent);
-    createLabel(mesh);
+    if (cowClickCount >= cowClickThreshold) {
+      // Threshold reached — spawn a flying cow instead of a regular shape
+      const group = createCow(BOUNDS);
+      group.userData.intent  = 'flying cow';
+      group.userData.geoName = 'cow';
+
+      group.position.set(
+        (Math.random() - 0.5) * BOUNDS.x * 0.8,
+        (Math.random() - 0.5) * BOUNDS.y * 0.8,
+        (Math.random() - 0.5) * BOUNDS.z * 0.6,
+      );
+      group.rotation.set(
+        Math.random() * Math.PI * 2,
+        Math.random() * Math.PI * 2,
+        Math.random() * Math.PI * 2,
+      );
+
+      scene.add(group);
+      shapes.push(group);
+      intentEngine.assign(group, 'flying cow');
+      createLabel(group);
+
+      // Reset the click counter/threshold for the next cow
+      cowClickCount = 0;
+      cowClickThreshold = Math.floor(Math.random() * 5) + 3;
+    } else {
+      const { mesh, intent } = ShapeFactory.create(intentNames, BOUNDS);
+
+      scene.add(mesh);
+      shapes.push(mesh);
+      intentEngine.assign(mesh, intent);
+      createLabel(mesh);
+    }
 
     document.getElementById('shape-count').textContent = `Shapes: ${shapes.length}`;
     updateRemoveButton();
@@ -768,8 +987,16 @@ const ShapeFactory = (() => {
     if (idx !== -1) shapes.splice(idx, 1);
     intentEngine.remove(mesh);
     removeLabel(mesh);
-    mesh.geometry.dispose();
-    mesh.material.dispose();
+    // Dispose geometry/materials — handle both Mesh and Group
+    if (mesh.isGroup) {
+      mesh.traverse(child => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) child.material.dispose();
+      });
+    } else {
+      mesh.geometry.dispose();
+      mesh.material.dispose();
+    }
     document.getElementById('shape-count').textContent = 'Shapes: ' + shapes.length;
     updateRemoveButton();
   }
@@ -823,16 +1050,27 @@ const ShapeFactory = (() => {
     // Don't raycast if click was on UI
     if (event.target !== renderer.domElement) return;
 
+    // Every canvas click counts toward the cow spawn threshold, regardless
+    // of whether a shape was actually hit by the raycaster below.
+    cowClickCount++;
+
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
     raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects(shapes);
+    const intersects = raycaster.intersectObjects(shapes, true);
 
     if (intersects.length > 0) {
       // Don't delete the last shape
       if (shapes.length <= 1) return;
-      removeShape(intersects[0].object);
+      // Find the root shape (could be a child of a group, e.g. the cow)
+      let target = intersects[0].object;
+      while (target.parent && !shapes.includes(target)) {
+        target = target.parent;
+      }
+      if (shapes.includes(target)) {
+        removeShape(target);
+      }
     }
   });
 
