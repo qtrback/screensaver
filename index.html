@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>3D Screensaver</title>
   <style>
-    /* ─── Reset & Layout ──────────────────────────────────────────────────── */
+    /* ── Reset & Layout ────────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
@@ -27,7 +27,7 @@
       height: 100% !important;
     }
 
-    /* ─── UI Panel ────────────────────────────────────────────────────────── */
+    /* ── UI Panel ────────────────────────────────────────────────────────── */
     #ui {
       position: fixed;
       bottom: 24px;
@@ -132,7 +132,7 @@
       color: #fff;
     }
 
-    /* ─── Intent Labels (CSS2DRenderer not used; we use HTML divs) ───────── */
+    /* ── Intent Labels (CSS2DRenderer not used; we use HTML divs) ───── */
     .intent-label {
       position: fixed;
       pointer-events: none;
@@ -168,9 +168,9 @@
 <script>
 'use strict';
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════════════════════════
    SECTION 1 — INTENT REGISTRY
-   ───────────────────────────────────────────────────────────────────────────
+   ─────────────────────────────────────────────────────────────────────────────
    Each entry maps an intent name → a behavior function.
 
    Signature:  behaviorFn(state, shape, allShapes, bounds, dt)
@@ -181,14 +181,15 @@
      dt         – delta time in seconds
 
    Adding a new intent = one line: IntentRegistry.register('myIntent', fn)
-   ══════════════════════════════════════════════════════════════════════════ */
+   ══════════════════════════════════════════════════════════════════════════════ */
 
 const IntentRegistry = (() => {
   const _behaviors = new Map();
 
-  /* ── Utility helpers shared across behaviors ─────────────────────────── */
+  /* ── Utility helpers shared across behaviors ─────────────────────────────── */
   const EASE = 0.04;          // velocity smoothing factor
   const MAX_SPEED = 1.8;      // world-units / second cap
+  const MIN_SPEED = 0.3;      // world-units / second floor — no object settles
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
   /** Steer velocity gently toward a desired direction (seek-style steering) */
@@ -196,7 +197,7 @@ const IntentRegistry = (() => {
     vel.x += (desired.x - vel.x) * factor;
     vel.y += (desired.y - vel.y) * factor;
     vel.z += (desired.z - vel.z) * factor;
-    // clamp speed
+    // clamp speed to MAX_SPEED
     const spd = Math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2);
     if (spd > MAX_SPEED) {
       const s = MAX_SPEED / spd;
@@ -211,7 +212,7 @@ const IntentRegistry = (() => {
     pos.z += vel.z * dt;
   }
 
-  /** Bounce position/velocity off the bounding box walls */
+  /** Bounce position/velocity off the bounding box walls with clamped speed */
   function bounce(pos, vel, bounds) {
     ['x', 'y', 'z'].forEach(axis => {
       if (pos[axis] > bounds[axis]) {
@@ -222,9 +223,35 @@ const IntentRegistry = (() => {
         if (vel[axis] < 0) vel[axis] *= -1;
       }
     });
+    // Clamp speed after wall bounce so restitution stays floaty
+    const spd = Math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2);
+    if (spd > MAX_SPEED) {
+      const s = MAX_SPEED / spd;
+      vel.x *= s; vel.y *= s; vel.z *= s;
+    }
   }
 
-  /* ── WANDER ─────────────────────────────────────────────────────────────
+  /**
+   * Enforce the minimum-speed floor on a velocity object.
+   * If speed < MIN_SPEED, nudge it back up to MIN_SPEED preserving direction.
+   * If essentially zero, give it a gentle random drift.
+   */
+  function enforceMinSpeed(vel) {
+    const spd = Math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2);
+    if (spd < 0.001) {
+      // Essentially zero — give a random drift direction at MIN_SPEED
+      const a1 = Math.random() * Math.PI * 2;
+      const a2 = (Math.random() - 0.5) * Math.PI;
+      vel.x = Math.cos(a1) * Math.cos(a2) * MIN_SPEED;
+      vel.y = Math.sin(a2) * MIN_SPEED;
+      vel.z = Math.sin(a1) * Math.cos(a2) * MIN_SPEED;
+    } else if (spd < MIN_SPEED) {
+      const s = MIN_SPEED / spd;
+      vel.x *= s; vel.y *= s; vel.z *= s;
+    }
+  }
+
+  /* ── WANDER ───────────────────────────────────────────────────────────────
      Smooth random movement; changes desired direction every few seconds.    */
   _behaviors.set('wander', (state, shape, _all, bounds, dt) => {
     if (!state.wanderTimer) state.wanderTimer = 0;
@@ -245,9 +272,10 @@ const IntentRegistry = (() => {
     steer(state.vel, state.desired, 0.03);
     integrate(shape.position, state.vel, dt);
     bounce(shape.position, state.vel, bounds);
+    enforceMinSpeed(state.vel);
   });
 
-  /* ── SEEK ───────────────────────────────────────────────────────────────
+  /* ── SEEK ─────────────────────────────────────────────────────────────────
      Moves toward the scene center (or toward another shape periodically).   */
   _behaviors.set('seek', (state, shape, allShapes, bounds, dt) => {
     if (!state.seekTimer) state.seekTimer = 0;
@@ -276,15 +304,16 @@ const IntentRegistry = (() => {
     const dy = state.target.y - shape.position.y;
     const dz = state.target.z - shape.position.z;
     const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
-    const spd = clamp(dist * 0.5, 0.2, MAX_SPEED);
+    const spd = clamp(dist * 0.5, MIN_SPEED, MAX_SPEED);
     const desired = { x: (dx / dist) * spd, y: (dy / dist) * spd, z: (dz / dist) * spd };
 
     steer(state.vel, desired, 0.05);
     integrate(shape.position, state.vel, dt);
     bounce(shape.position, state.vel, bounds);
+    enforceMinSpeed(state.vel);
   });
 
-  /* ── FLEE ───────────────────────────────────────────────────────────────
+  /* ── FLEE ─────────────────────────────────────────────────────────────────
      Steers away from the nearest neighbour shape.                           */
   _behaviors.set('flee', (state, shape, allShapes, bounds, dt) => {
     const FEAR_RADIUS = 4.0;
@@ -309,7 +338,7 @@ const IntentRegistry = (() => {
     const mag = Math.sqrt(fx * fx + fy * fy + fz * fz);
     let desired;
     if (mag > 0.01) {
-      const spd = clamp(mag * 1.5, 0.3, MAX_SPEED);
+      const spd = clamp(mag * 1.5, MIN_SPEED, MAX_SPEED);
       desired = { x: (fx / mag) * spd, y: (fy / mag) * spd, z: (fz / mag) * spd };
     } else {
       if (!state.wanderTimer) state.wanderTimer = 0;
@@ -326,10 +355,12 @@ const IntentRegistry = (() => {
     steer(state.vel, desired, 0.06);
     integrate(shape.position, state.vel, dt);
     bounce(shape.position, state.vel, bounds);
+    enforceMinSpeed(state.vel);
   });
 
-  /* ── ORBIT ──────────────────────────────────────────────────────────────
-     Circles around the scene center at a random radius and inclination.     */
+  /* ── ORBIT ────────────────────────────────────────────────────────────────
+     Circles around the scene center at a random radius and inclination.
+     NOW: drives motion via desired velocity → steer → integrate → bounce.  */
   _behaviors.set('orbit', (state, shape, _all, bounds, dt) => {
     if (state.orbitAngle === undefined) {
       state.orbitAngle = Math.random() * Math.PI * 2;
@@ -342,25 +373,34 @@ const IntentRegistry = (() => {
 
     state.orbitAngle += state.orbitSpeed * dt;
 
+    // Compute the target point on the orbit path
     const tx = Math.cos(state.orbitAngle) * state.orbitRadius;
     const ty = Math.sin(state.orbitAngle) * state.orbitRadius * Math.sin(state.orbitTilt)
                + Math.sin(state.orbitAngle * state.orbitBobFreq) * state.orbitBobAmp;
     const tz = Math.sin(state.orbitAngle) * state.orbitRadius * Math.cos(state.orbitTilt);
 
-    // Move position toward the orbit target (smooth follow rather than snap)
-    shape.position.x += (tx - shape.position.x) * 0.08;
-    shape.position.y += (ty - shape.position.y) * 0.08;
-    shape.position.z += (tz - shape.position.z) * 0.08;
+    // Compute desired velocity pointing from current position toward orbit target
+    const dx = tx - shape.position.x;
+    const dy = ty - shape.position.y;
+    const dz = tz - shape.position.z;
+    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 0.001;
+    // Orbit follow speed: proportional to distance, floaty
+    const orbitFollowSpd = clamp(dist * 1.8, MIN_SPEED, MAX_SPEED);
+    const desired = {
+      x: (dx / dist) * orbitFollowSpd,
+      y: (dy / dist) * orbitFollowSpd,
+      z: (dz / dist) * orbitFollowSpd,
+    };
 
-    // Update velocity for consistent bounce-avoidance (not strictly needed for orbit
-    // but keeps the state consistent if intent switches)
-    state.vel.x = (shape.position.x - tx) * -0.1;
-    state.vel.y = (shape.position.y - ty) * -0.1;
-    state.vel.z = (shape.position.z - tz) * -0.1;
+    steer(state.vel, desired, 0.08);
+    integrate(shape.position, state.vel, dt);
+    bounce(shape.position, state.vel, bounds);
+    enforceMinSpeed(state.vel);
   });
 
-  /* ── IDLE ───────────────────────────────────────────────────────────────
-     Gentle floating / bobbing in place with very slow drift.                */
+  /* ── IDLE ─────────────────────────────────────────────────────────────────
+     Gentle floating / bobbing in place with very slow drift.
+     NOW: drives motion via desired velocity → steer → integrate → bounce.  */
   _behaviors.set('idle', (state, shape, _all, bounds, dt) => {
     if (state.idlePhase === undefined) {
       state.idlePhase = Math.random() * Math.PI * 2;
@@ -393,18 +433,34 @@ const IntentRegistry = (() => {
     const bob = Math.sin(state.idlePhase) * 0.25;
     const sway= Math.cos(state.idlePhase * 0.7) * 0.15;
 
-    // Move toward (anchor + bob offset) gently
+    // Compute desired position (anchor + bob offset)
     const tx = state.idleAnchor.x + sway;
     const ty = state.idleAnchor.y + bob;
     const tz = state.idleAnchor.z;
 
-    shape.position.x += (tx - shape.position.x) * 0.02;
-    shape.position.y += (ty - shape.position.y) * 0.02;
-    shape.position.z += (tz - shape.position.z) * 0.02;
+    // Compute desired velocity pointing toward target — gentle idle speed
+    const dx = tx - shape.position.x;
+    const dy = ty - shape.position.y;
+    const dz = tz - shape.position.z;
+    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 0.001;
+    // Keep idle slow and floaty; proportional but capped low
+    const idleSpd = clamp(dist * 1.2, MIN_SPEED, MAX_SPEED * 0.5);
+    const desired = {
+      x: (dx / dist) * idleSpd,
+      y: (dy / dist) * idleSpd,
+      z: (dz / dist) * idleSpd,
+    };
+
+    steer(state.vel, desired, 0.02);
+    integrate(shape.position, state.vel, dt);
+    bounce(shape.position, state.vel, bounds);
+    enforceMinSpeed(state.vel);
   });
 
-  /* ── PULSE ──────────────────────────────────────────────────────────────
-     Extra intent: shape pulses in scale and drifts in a figure-8 pattern.  */
+  /* ── PULSE ────────────────────────────────────────────────────────────────
+     Extra intent: shape pulses in scale and drifts in a figure-8 pattern.
+     NOW: drives motion via desired velocity → steer → integrate → bounce.
+     Scale breathing is independent and preserved.                           */
   _behaviors.set('pulse', (state, shape, _all, bounds, dt) => {
     if (state.pulsePhase === undefined) {
       state.pulsePhase = Math.random() * Math.PI * 2;
@@ -419,22 +475,35 @@ const IntentRegistry = (() => {
 
     state.pulsePhase += dt * state.pulseSpeed;
 
-    // Lissajous-ish figure-8 motion
+    // Lissajous-ish figure-8 motion — compute the target point
     const radius = 1.2;
     const tx = state.pulseAnchor.x + Math.sin(state.pulsePhase) * radius;
     const ty = state.pulseAnchor.y + Math.sin(state.pulsePhase * 2) * radius * 0.5;
     const tz = state.pulseAnchor.z + Math.cos(state.pulsePhase) * radius * 0.5;
 
-    shape.position.x += (tx - shape.position.x) * 0.04;
-    shape.position.y += (ty - shape.position.y) * 0.04;
-    shape.position.z += (tz - shape.position.z) * 0.04;
+    // Desired velocity pointing from current position toward figure-8 target
+    const dx = tx - shape.position.x;
+    const dy = ty - shape.position.y;
+    const dz = tz - shape.position.z;
+    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 0.001;
+    const pulseSpd = clamp(dist * 2.0, MIN_SPEED, MAX_SPEED * 0.8);
+    const desired = {
+      x: (dx / dist) * pulseSpd,
+      y: (dy / dist) * pulseSpd,
+      z: (dz / dist) * pulseSpd,
+    };
 
-    // Breathe scale
+    steer(state.vel, desired, 0.05);
+    integrate(shape.position, state.vel, dt);
+    bounce(shape.position, state.vel, bounds);
+    enforceMinSpeed(state.vel);
+
+    // Breathe scale — independent of position, preserved
     const scale = state.baseScale * (1 + Math.sin(state.pulsePhase * 1.5) * 0.18);
     shape.scale.set(scale, scale, scale);
   });
 
-  /* ── CHASE ──────────────────────────────────────────────────────────────
+  /* ── CHASE ────────────────────────────────────────────────────────────────
      Extra intent: persistently chases the most-recently-spawned other shape. */
   _behaviors.set('chase', (state, shape, allShapes, bounds, dt) => {
     // Pick a chase target (the last shape in the list that isn't self)
@@ -450,21 +519,24 @@ const IntentRegistry = (() => {
       const dy = target.position.y - shape.position.y;
       const dz = target.position.z - shape.position.z;
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
-      // Stop when very close
-      const spd = dist > 0.8 ? clamp(dist * 0.4, 0.1, MAX_SPEED * 0.9) : 0;
+      // Always maintain at least MIN_SPEED — no stopping when close
+      const spd = clamp(dist * 0.4, MIN_SPEED, MAX_SPEED * 0.9);
       const desired = { x: (dx / dist) * spd, y: (dy / dist) * spd, z: (dz / dist) * spd };
       steer(state.vel, desired, 0.07);
     }
 
     integrate(shape.position, state.vel, dt);
     bounce(shape.position, state.vel, bounds);
+    enforceMinSpeed(state.vel);
   });
 
   /* FLYING COW
      Extra intent: graceful swooping/gliding flight in a lazy figure-8
      (lemniscate) on X/Z with a gentle sinusoidal up-down glide on Y.
-     Slower and floatier than wander/chase/flee -- a bird-like soaring path
-     visually distinct from every other registered intent. */
+     Slower and floatier than wander/chase/flee — a bird-like soaring path
+     visually distinct from every other registered intent.
+     NOW: drives motion via desired velocity → steer → integrate → bounce.
+     Rotation banking and tail swish are preserved.                          */
   _behaviors.set('flying cow', (state, shape, _all, bounds, dt) => {
     if (state.cowPhase === undefined) {
       state.cowPhase   = Math.random() * Math.PI * 2;
@@ -483,25 +555,29 @@ const IntentRegistry = (() => {
     const t = state.cowPhase;
 
     // Lazy figure-8 (lemniscate of Bernoulli) on X/Z; gentle sinusoidal
-    // up-down glide on Y -- a soaring, swooping path.
+    // up-down glide on Y — a soaring, swooping path.
     const denom = 1 + Math.sin(t) * Math.sin(t);
     const tx = state.cowAnchor.x + (state.cowAmpXZ * Math.cos(t)) / denom;
     const tz = state.cowAnchor.z + (state.cowAmpXZ * Math.sin(t) * Math.cos(t)) / denom;
     const ty = state.cowAnchor.y + Math.sin(t * state.cowFreqY) * state.cowAmpY;
 
-    const prevX = shape.position.x, prevY = shape.position.y, prevZ = shape.position.z;
+    // Compute desired velocity pointing from current position toward swoop target
+    const dx = tx - shape.position.x;
+    const dy = ty - shape.position.y;
+    const dz = tz - shape.position.z;
+    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 0.001;
+    // Cow is slow and floaty — proportional but capped low
+    const cowSpd = clamp(dist * 1.5, MIN_SPEED, MAX_SPEED * 0.7);
+    const desired = {
+      x: (dx / dist) * cowSpd,
+      y: (dy / dist) * cowSpd,
+      z: (dz / dist) * cowSpd,
+    };
 
-    // Slow, floaty ease toward the swoop target (much gentler than other intents)
-    shape.position.x += (tx - shape.position.x) * 0.025;
-    shape.position.y += (ty - shape.position.y) * 0.025;
-    shape.position.z += (tz - shape.position.z) * 0.025;
-
-    // Track velocity for bounce + consistency if intent switches
-    state.vel.x = (shape.position.x - prevX) / dt;
-    state.vel.y = (shape.position.y - prevY) / dt;
-    state.vel.z = (shape.position.z - prevZ) / dt;
-
+    steer(state.vel, desired, 0.025);
+    integrate(shape.position, state.vel, dt);
     bounce(shape.position, state.vel, bounds);
+    enforceMinSpeed(state.vel);
 
     // Bank gently into the glide direction for a convincing soar, and
     // swish the tail if this shape is a cow mesh.
@@ -512,7 +588,7 @@ const IntentRegistry = (() => {
     }
   });
 
-  /* ── Public API ──────────────────────────────────────────────────────── */
+  /* ── Public API ──────────────────────────────────────────────────────────── */
   return {
     /**
      * Register a new intent behavior.
@@ -535,11 +611,11 @@ const IntentRegistry = (() => {
 })();
 
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════════════════════════
    SECTION 2 — INTENT ENGINE
-   ───────────────────────────────────────────────────────────────────────────
+   ─────────────────────────────────────────────────────────────────────────────
    Manages per-shape intent state and delegates each frame to the registry.
-   ══════════════════════════════════════════════════════════════════════════ */
+   ══════════════════════════════════════════════════════════════════════════════ */
 
 class IntentEngine {
   constructor() {
@@ -595,20 +671,30 @@ class IntentEngine {
       IntentRegistry.execute(entry.intent, entry.state, mesh, allShapes, bounds, dt);
 
       // Gentle rotation on every shape — speed varies by intent
-      const rotSpeed = entry.intent === 'idle' ? 0.3 : entry.intent === 'orbit' ? 0.8 : 0.5;
-      mesh.rotation.x += dt * rotSpeed * 0.7;
-      mesh.rotation.y += dt * rotSpeed * 1.1;
-      mesh.rotation.z += dt * rotSpeed * 0.4;
+      // Skip rotation.z for flying cow (it uses banking; x/y rotation also
+      // overridden to avoid fighting the swoop animation, but a little spin
+      // on y is fine for variety)
+      if (entry.intent === 'flying cow') {
+        const rotSpeed = 0.3;
+        mesh.rotation.x += dt * rotSpeed * 0.4;
+        mesh.rotation.y += dt * rotSpeed * 0.7;
+        // rotation.z is set by the flying cow behavior for banking — don't override
+      } else {
+        const rotSpeed = entry.intent === 'idle' ? 0.3 : entry.intent === 'orbit' ? 0.8 : 0.5;
+        mesh.rotation.x += dt * rotSpeed * 0.7;
+        mesh.rotation.y += dt * rotSpeed * 1.1;
+        mesh.rotation.z += dt * rotSpeed * 0.4;
+      }
     }
   }
 }
 
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════════════════════════
    SECTION 3 — SHAPE FACTORY
-   ───────────────────────────────────────────────────────────────────────────
+   ─────────────────────────────────────────────────────────────────────────────
    Geometry registry: adding a new shape type = one registration line.
-   ══════════════════════════════════════════════════════════════════════════ */
+   ══════════════════════════════════════════════════════════════════════════════ */
 
 const ShapeFactory = (() => {
   /* Geometry registry — one entry per shape type */
@@ -840,14 +926,14 @@ function createCow(bounds) {
 }
 
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════════════════════════
    SECTION 4 — MAIN APPLICATION
-   ───────────────────────────────────────────────────────────────────────────
+   ─────────────────────────────────────────────────────────────────────────────
    Three.js scene setup, animation loop, UI controls.
-   ══════════════════════════════════════════════════════════════════════════ */
+   ══════════════════════════════════════════════════════════════════════════════ */
 
 (function main() {
-  /* ── Scene ────────────────────────────────────────────────────────────── */
+  /* ── Scene ──────────────────────────────────────────────────────────────── */
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setClearColor(0x000000, 1);
@@ -861,11 +947,11 @@ function createCow(bounds) {
   // Very subtle fog for depth
   scene.fog = new THREE.FogExp2(0x000000, 0.018);
 
-  /* ── Camera ───────────────────────────────────────────────────────────── */
+  /* ── Camera ─────────────────────────────────────────────────────────────── */
   const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
   camera.position.set(0, 0, 14);
 
-  /* ── Lights ───────────────────────────────────────────────────────────── */
+  /* ── Lights ─────────────────────────────────────────────────────────────── */
   // Ambient — soft fill
   const ambient = new THREE.AmbientLight(0xffffff, 0.35);
   scene.add(ambient);
@@ -886,11 +972,11 @@ function createCow(bounds) {
   fillLight.position.set(0, -6, 2);
   scene.add(fillLight);
 
-  /* ── Bounding box ─────────────────────────────────────────────────────── */
+  /* ── Bounding box ───────────────────────────────────────────────────────── */
   // Half-extents; shapes bounce inside this invisible box
   const BOUNDS = { x: 8, y: 5, z: 5 };
 
-  /* ── Background star field ────────────────────────────────────────────── */
+  /* ── Background star field ──────────────────────────────────────────────── */
   (function addStars() {
     const count = 600;
     const positions = new Float32Array(count * 3);
@@ -903,18 +989,17 @@ function createCow(bounds) {
     scene.add(new THREE.Points(starGeo, starMat));
   })();
 
-  /* ── Intent engine ────────────────────────────────────────────────────── */
+  /* ── Intent engine ──────────────────────────────────────────────────────── */
   const intentEngine = new IntentEngine();
 
-  /* ── Live shape tracking ──────────────────────────────────────────────── */
+  /* ── Live shape tracking ────────────────────────────────────────────────── */
   const shapes = [];    // THREE.Mesh[]
   const labels = [];    // { el: HTMLDivElement, mesh: THREE.Mesh }[]
-  const COW_SPAWN_PROBABILITY = 0.25;
   const MAX_SHAPES = 7;
   const COLLISION_RADIUS = 0.6;
   let showLabels = true;
 
-  /* ── Label creation ───────────────────────────────────────────────────── */
+  /* ── Label creation ─────────────────────────────────────────────────────── */
   function createLabel(mesh) {
     const el = document.createElement('div');
     el.className = 'intent-label';
@@ -956,9 +1041,16 @@ function createCow(bounds) {
     document.getElementById('btn-add').disabled = shapes.length >= MAX_SHAPES;
   }
 
-  /* ── Spawn a shape ────────────────────────────────────────────────────── */
+  /* ── Spawn a shape ──────────────────────────────────────────────────────── */
   function spawnShape() {
     if (shapes.length >= MAX_SHAPES) return;
+
+    // If adding this object would bring the count to MAX_SHAPES (7)
+    // and no cow is currently active, spawn the cow instead of a random shape.
+    if (shapes.length === MAX_SHAPES - 1 && !cowActive()) {
+      spawnCow();
+      return;
+    }
 
     const intentNames = IntentRegistry.names.filter(n => n !== 'flying cow');
     const { mesh, intent } = ShapeFactory.create(intentNames, BOUNDS);
@@ -1001,7 +1093,7 @@ function createCow(bounds) {
     updateAddButton();
   }
 
-  /* ── Remove a shape ──────────────────────────────────────────────────────── */
+  /* ── Remove a shape ─────────────────────────────────────────────────────── */
   function removeShape(mesh) {
     scene.remove(mesh);
     const idx = shapes.indexOf(mesh);
@@ -1032,7 +1124,7 @@ function createCow(bounds) {
   updateRemoveButton();
   updateAddButton();
 
-  /* ── UI ───────────────────────────────────────────────────────────────── */
+  /* ── UI ─────────────────────────────────────────────────────────────────── */
   document.getElementById('btn-add').addEventListener('click', spawnShape);
 
   document.getElementById('btn-remove').addEventListener('click', () => {
@@ -1047,7 +1139,7 @@ function createCow(bounds) {
     labels.forEach(l => { l.el.style.opacity = showLabels ? '1' : '0'; });
   });
 
-  /* ── Cursor auto-hide after inactivity ───────────────────────────────── */
+  /* ── Cursor auto-hide after inactivity ──────────────────────────────────── */
   let cursorTimer = null;
   const ui = document.getElementById('ui');
 
@@ -1078,7 +1170,6 @@ function createCow(bounds) {
 
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObjects(shapes, true);
-    let deletedShape = false;
 
     if (intersects.length > 0 && shapes.length > 1) {
       // Find the root shape (could be a child of a group, e.g. the cow)
@@ -1088,19 +1179,19 @@ function createCow(bounds) {
       }
       if (shapes.includes(target)) {
         removeShape(target);
-        deletedShape = true;
       }
     }
-
-    if (intersects.length === 0 && !deletedShape && Math.random() < COW_SPAWN_PROBABILITY) {
-      spawnCow();
-    }
+    // Empty-space click does nothing (easter-egg cow spawn removed — F)
   });
 
   function resolveCollisions() {
     const minDistance = COLLISION_RADIUS * 2;
     const minDistanceSq = minDistance * minDistance;
     const EPSILON = 0.0001;
+    // Restitution: extra outward impulse so bounces read visually even at slow speeds.
+    // After velocity exchange, each object gains this much additional outward normal speed.
+    const RESTITUTION_BONUS = 0.35; // world-units/sec added along normal per object
+    const MIN_SPEED = 0.3; // imported constant (same as in behaviors)
 
     for (let i = 0; i < shapes.length; i++) {
       const a = shapes[i];
@@ -1132,6 +1223,7 @@ function createCow(bounds) {
         ny /= dist;
         nz /= dist;
 
+        // Positional push-apart so objects don't overlap
         const overlap = minDistance - Math.max(dist, EPSILON);
         const push = overlap * 0.5;
         a.position.x -= nx * push;
@@ -1147,6 +1239,7 @@ function createCow(bounds) {
         const relNormalSpeed = relVelX * nx + relVelY * ny + relVelZ * nz;
 
         if (relNormalSpeed < 0) {
+          // Elastic normal-velocity exchange
           const aNormal = aState.vel.x * nx + aState.vel.y * ny + aState.vel.z * nz;
           const bNormal = bState.vel.x * nx + bState.vel.y * ny + bState.vel.z * nz;
           const normalDelta = bNormal - aNormal;
@@ -1157,12 +1250,37 @@ function createCow(bounds) {
           bState.vel.x -= normalDelta * nx;
           bState.vel.y -= normalDelta * ny;
           bState.vel.z -= normalDelta * nz;
+
+          // Restitution bonus: push both objects apart along the normal so the
+          // bounce reads visually at slow screensaver speeds.
+          // a moves in -normal direction, b moves in +normal direction.
+          aState.vel.x -= nx * RESTITUTION_BONUS;
+          aState.vel.y -= ny * RESTITUTION_BONUS;
+          aState.vel.z -= nz * RESTITUTION_BONUS;
+          bState.vel.x += nx * RESTITUTION_BONUS;
+          bState.vel.y += ny * RESTITUTION_BONUS;
+          bState.vel.z += nz * RESTITUTION_BONUS;
+
+          // Ensure each object has at least MIN_SPEED of outward normal velocity
+          // (so the bounce reads, not mushy) then clamp to MAX_SPEED.
+          const clampSpeed = (vel) => {
+            const spd = Math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2);
+            if (spd > 1.8) { // MAX_SPEED = 1.8
+              const s = 1.8 / spd;
+              vel.x *= s; vel.y *= s; vel.z *= s;
+            } else if (spd < MIN_SPEED && spd > 0.001) {
+              const s = MIN_SPEED / spd;
+              vel.x *= s; vel.y *= s; vel.z *= s;
+            }
+          };
+          clampSpeed(aState.vel);
+          clampSpeed(bState.vel);
         }
       }
     }
   }
 
-  /* ── Resize handler ───────────────────────────────────────────────────── */
+  /* ── Resize handler ─────────────────────────────────────────────────────── */
   function onResize() {
     const w = window.innerWidth;
     const h = window.innerHeight;
@@ -1173,7 +1291,7 @@ function createCow(bounds) {
   window.addEventListener('resize', onResize);
   onResize();
 
-  /* ── Animation loop ───────────────────────────────────────────────────── */
+  /* ── Animation loop ─────────────────────────────────────────────────────── */
   const clock = new THREE.Clock();
 
   // Slow camera drift for screensaver feel
