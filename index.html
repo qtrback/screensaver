@@ -148,6 +148,25 @@
       white-space: nowrap;
       transition: opacity 0.3s;
     }
+    .cow-message {
+      position: fixed;
+      top: 32px;
+      left: 50%;
+      transform: translateX(-50%);
+      pointer-events: none;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 10px;
+      padding: 10px 18px;
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.4s;
+      z-index: 50;
+    }
   </style>
 </head>
 <body>
@@ -613,7 +632,8 @@ function createCow(bounds) {
   /* ── Live shape tracking ────────────────────────────────────────────────── */
   const shapes = [];    // THREE.Object3D[]
   const labels = [];    // { el: HTMLDivElement, mesh: THREE.Object3D }[]
-  const MAX_SHAPES = 7;
+  const MAX_SHAPES = 12;
+  const COW_CHANCE = 0.12;   // ~1 in 8 chance the cow spawns on any Add
   const COLLISION_RADIUS = 0.6;
   let showLabels = true;
 
@@ -663,9 +683,10 @@ function createCow(bounds) {
   function spawnShape() {
     if (shapes.length >= MAX_SHAPES) return;
 
-    // If adding this object would bring the count to MAX_SHAPES (7)
-    // and no cow is currently active, spawn the cow instead of a random shape.
-    if (shapes.length === MAX_SHAPES - 1 && !cowActive()) {
+    // The cow is a rare surprise: on every Add there's a small random chance
+    // it appears instead of a normal shape — eligible at any count (even the
+    // first), never guaranteed, at most one at a time.
+    if (!cowActive() && Math.random() < COW_CHANCE) {
       spawnCow();
       return;
     }
@@ -704,10 +725,25 @@ function createCow(bounds) {
     shapes.push(group);
     intentEngine.assign(group, 'cow');
     createLabel(group);
+    showCowMessage();
 
     updateShapeCount();
     updateRemoveButton();
     updateAddButton();
+  }
+
+  function showCowMessage() {
+    const el = document.createElement('div');
+    el.className = 'cow-message';
+    el.textContent = 'You found a cow in space! 🐄';
+    document.body.appendChild(el);
+    // fade in
+    requestAnimationFrame(() => { el.style.opacity = '1'; });
+    // fade out and remove after a few seconds
+    setTimeout(() => {
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 400);
+    }, 3200);
   }
 
   /* ── Remove a shape ─────────────────────────────────────────────────────── */
