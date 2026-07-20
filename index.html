@@ -940,7 +940,7 @@ function createCow(bounds) {
 
   /* ── Spawn a shape ────────────────────────────────────────────────────── */
   function spawnShape() {
-    const intentNames = IntentRegistry.names;
+    const intentNames = IntentRegistry.names.filter(n => n !== 'flying cow');
 
     if (cowClickCount >= cowClickThreshold) {
       // Threshold reached — spawn a flying cow instead of a regular shape
