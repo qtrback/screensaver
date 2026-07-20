@@ -579,6 +579,11 @@ class IntentEngine {
     return this._entries.get(mesh)?.intent ?? 'idle';
   }
 
+  /** Get the mutable intent state for a mesh. */
+  getState(mesh) {
+    return this._entries.get(mesh)?.state ?? null;
+  }
+
   /**
    * Tick all registered shapes.
    * @param {THREE.Mesh[]} allShapes  - array of all live meshes
@@ -904,9 +909,10 @@ function createCow(bounds) {
   /* ── Live shape tracking ──────────────────────────────────────────────── */
   const shapes = [];    // THREE.Mesh[]
   const labels = [];    // { el: HTMLDivElement, mesh: THREE.Mesh }[]
+  const COW_SPAWN_PROBABILITY = 0.25;
+  const MAX_SHAPES = 7;
+  const COLLISION_RADIUS = 0.6;
   let showLabels = true;
-  let cowClickCount = 0;
-  let cowClickThreshold = Math.floor(Math.random() * 5) + 3; // random 3-7 inclusive
 
   /* ── Label creation ───────────────────────────────────────────────────── */
   function createLabel(mesh) {
@@ -938,46 +944,61 @@ function createCow(bounds) {
     };
   }
 
+  function cowActive() {
+    return shapes.some(s => s.userData && s.userData.geoName === 'cow');
+  }
+
+  function updateShapeCount() {
+    document.getElementById('shape-count').textContent = `Shapes: ${shapes.length}`;
+  }
+
+  function updateAddButton() {
+    document.getElementById('btn-add').disabled = shapes.length >= MAX_SHAPES;
+  }
+
   /* ── Spawn a shape ────────────────────────────────────────────────────── */
   function spawnShape() {
+    if (shapes.length >= MAX_SHAPES) return;
+
     const intentNames = IntentRegistry.names.filter(n => n !== 'flying cow');
+    const { mesh, intent } = ShapeFactory.create(intentNames, BOUNDS);
 
-    if (cowClickCount >= cowClickThreshold) {
-      // Threshold reached — spawn a flying cow instead of a regular shape
-      const group = createCow(BOUNDS);
-      group.userData.intent  = 'flying cow';
-      group.userData.geoName = 'cow';
+    scene.add(mesh);
+    shapes.push(mesh);
+    intentEngine.assign(mesh, intent);
+    createLabel(mesh);
 
-      group.position.set(
-        (Math.random() - 0.5) * BOUNDS.x * 0.8,
-        (Math.random() - 0.5) * BOUNDS.y * 0.8,
-        (Math.random() - 0.5) * BOUNDS.z * 0.6,
-      );
-      group.rotation.set(
-        Math.random() * Math.PI * 2,
-        Math.random() * Math.PI * 2,
-        Math.random() * Math.PI * 2,
-      );
-
-      scene.add(group);
-      shapes.push(group);
-      intentEngine.assign(group, 'flying cow');
-      createLabel(group);
-
-      // Reset the click counter/threshold for the next cow
-      cowClickCount = 0;
-      cowClickThreshold = Math.floor(Math.random() * 5) + 3;
-    } else {
-      const { mesh, intent } = ShapeFactory.create(intentNames, BOUNDS);
-
-      scene.add(mesh);
-      shapes.push(mesh);
-      intentEngine.assign(mesh, intent);
-      createLabel(mesh);
-    }
-
-    document.getElementById('shape-count').textContent = `Shapes: ${shapes.length}`;
+    updateShapeCount();
     updateRemoveButton();
+    updateAddButton();
+  }
+
+  function spawnCow() {
+    if (shapes.length >= MAX_SHAPES || cowActive()) return;
+
+    const group = createCow(BOUNDS);
+    group.userData.intent  = 'flying cow';
+    group.userData.geoName = 'cow';
+
+    group.position.set(
+      (Math.random() - 0.5) * BOUNDS.x * 0.8,
+      (Math.random() - 0.5) * BOUNDS.y * 0.8,
+      (Math.random() - 0.5) * BOUNDS.z * 0.6,
+    );
+    group.rotation.set(
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+    );
+
+    scene.add(group);
+    shapes.push(group);
+    intentEngine.assign(group, 'flying cow');
+    createLabel(group);
+
+    updateShapeCount();
+    updateRemoveButton();
+    updateAddButton();
   }
 
   /* ── Remove a shape ──────────────────────────────────────────────────────── */
@@ -997,8 +1018,9 @@ function createCow(bounds) {
       mesh.geometry.dispose();
       mesh.material.dispose();
     }
-    document.getElementById('shape-count').textContent = 'Shapes: ' + shapes.length;
+    updateShapeCount();
     updateRemoveButton();
+    updateAddButton();
   }
 
   function updateRemoveButton() {
@@ -1008,6 +1030,7 @@ function createCow(bounds) {
   // Spawn the initial shape
   spawnShape();
   updateRemoveButton();
+  updateAddButton();
 
   /* ── UI ───────────────────────────────────────────────────────────────── */
   document.getElementById('btn-add').addEventListener('click', spawnShape);
@@ -1050,19 +1073,14 @@ function createCow(bounds) {
     // Don't raycast if click was on UI
     if (event.target !== renderer.domElement) return;
 
-    // Every canvas click counts toward the cow spawn threshold, regardless
-    // of whether a shape was actually hit by the raycaster below.
-    cowClickCount++;
-
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObjects(shapes, true);
+    let deletedShape = false;
 
-    if (intersects.length > 0) {
-      // Don't delete the last shape
-      if (shapes.length <= 1) return;
+    if (intersects.length > 0 && shapes.length > 1) {
       // Find the root shape (could be a child of a group, e.g. the cow)
       let target = intersects[0].object;
       while (target.parent && !shapes.includes(target)) {
@@ -1070,9 +1088,79 @@ function createCow(bounds) {
       }
       if (shapes.includes(target)) {
         removeShape(target);
+        deletedShape = true;
       }
     }
+
+    if (intersects.length === 0 && !deletedShape && Math.random() < COW_SPAWN_PROBABILITY) {
+      spawnCow();
+    }
   });
+
+  function resolveCollisions() {
+    const minDistance = COLLISION_RADIUS * 2;
+    const minDistanceSq = minDistance * minDistance;
+    const EPSILON = 0.0001;
+
+    for (let i = 0; i < shapes.length; i++) {
+      const a = shapes[i];
+      const aState = intentEngine.getState(a);
+      if (!aState || !aState.vel) continue;
+
+      for (let j = i + 1; j < shapes.length; j++) {
+        const b = shapes[j];
+        const bState = intentEngine.getState(b);
+        if (!bState || !bState.vel) continue;
+
+        let nx = b.position.x - a.position.x;
+        let ny = b.position.y - a.position.y;
+        let nz = b.position.z - a.position.z;
+        let distSq = nx * nx + ny * ny + nz * nz;
+
+        if (distSq >= minDistanceSq) continue;
+
+        let dist = Math.sqrt(distSq);
+        if (dist < EPSILON) {
+          const angle = Math.random() * Math.PI * 2;
+          nx = Math.cos(angle);
+          ny = (Math.random() - 0.5) * 0.5;
+          nz = Math.sin(angle);
+          dist = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        }
+
+        nx /= dist;
+        ny /= dist;
+        nz /= dist;
+
+        const overlap = minDistance - Math.max(dist, EPSILON);
+        const push = overlap * 0.5;
+        a.position.x -= nx * push;
+        a.position.y -= ny * push;
+        a.position.z -= nz * push;
+        b.position.x += nx * push;
+        b.position.y += ny * push;
+        b.position.z += nz * push;
+
+        const relVelX = bState.vel.x - aState.vel.x;
+        const relVelY = bState.vel.y - aState.vel.y;
+        const relVelZ = bState.vel.z - aState.vel.z;
+        const relNormalSpeed = relVelX * nx + relVelY * ny + relVelZ * nz;
+
+        if (relNormalSpeed < 0) {
+          const aNormal = aState.vel.x * nx + aState.vel.y * ny + aState.vel.z * nz;
+          const bNormal = bState.vel.x * nx + bState.vel.y * ny + bState.vel.z * nz;
+          const normalDelta = bNormal - aNormal;
+
+          aState.vel.x += normalDelta * nx;
+          aState.vel.y += normalDelta * ny;
+          aState.vel.z += normalDelta * nz;
+          bState.vel.x -= normalDelta * nx;
+          bState.vel.y -= normalDelta * ny;
+          bState.vel.z -= normalDelta * nz;
+        }
+      }
+    }
+  }
 
   /* ── Resize handler ───────────────────────────────────────────────────── */
   function onResize() {
@@ -1104,6 +1192,7 @@ function createCow(bounds) {
 
     /* Tick intent engine */
     intentEngine.update(shapes, BOUNDS, dt);
+    resolveCollisions();
 
     /* Update HTML labels */
     if (showLabels) {
