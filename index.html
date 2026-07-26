@@ -167,11 +167,37 @@
       transition: opacity 0.4s;
       z-index: 50;
     }
+
+    /* ── Type tally panel (top-left) ───────────────────────────────────────── */
+    #type-tally {
+      position: fixed;
+      top: 24px;
+      left: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+      z-index: 100;
+      transition: opacity 0.6s ease;
+    }
+
+    #type-tally.hidden { opacity: 0; pointer-events: none; }
+
+    #type-tally .tally-row {
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      text-transform: lowercase;
+      color: rgba(255, 255, 255, 0.75);
+    }
   </style>
 </head>
 <body>
 
 <div id="canvas-container"></div>
+
+<!-- Type tally panel (top-left) -->
+<div id="type-tally"></div>
 
 <!-- UI controls -->
 <div id="ui">
@@ -637,6 +663,27 @@ function createCow(bounds) {
   const COLLISION_RADIUS = 0.6;
   let showLabels = true;
 
+  /* ── Session add-tally (in-memory only, resets on reload) ──────────────── */
+  const sessionCounts = {};  // { [geoName: string]: number } — keyed generically
+
+  function tallyAdd(geoName) {
+    sessionCounts[geoName] = (sessionCounts[geoName] || 0) + 1;
+    renderTypePanel();
+  }
+
+  function renderTypePanel() {
+    const panel = document.getElementById('type-tally');
+    if (!panel) return;
+    panel.innerHTML = '';
+    for (const [name, count] of Object.entries(sessionCounts)) {
+      if (count < 1) continue;
+      const row = document.createElement('div');
+      row.className = 'ui-badge tally-row';
+      row.textContent = `${name}: ${count}`;
+      panel.appendChild(row);
+    }
+  }
+
   /* ── Label creation ─────────────────────────────────────────────────────── */
   function createLabel(mesh) {
     const el = document.createElement('div');
@@ -672,7 +719,8 @@ function createCow(bounds) {
   }
 
   function updateShapeCount() {
-    document.getElementById('shape-count').textContent = `Shapes: ${shapes.length}`;
+    const total = Object.values(sessionCounts).reduce((a, b) => a + b, 0);
+    document.getElementById('shape-count').textContent = `Shapes: ${total}`;
   }
 
   function updateAddButton() {
@@ -698,6 +746,7 @@ function createCow(bounds) {
     intentEngine.assign(mesh, intent);
     createLabel(mesh);
 
+    tallyAdd(mesh.userData.geoName);
     updateShapeCount();
     updateRemoveButton();
     updateAddButton();
@@ -727,6 +776,7 @@ function createCow(bounds) {
     createLabel(group);
     showCowMessage();
 
+    tallyAdd(group.userData.geoName);
     updateShapeCount();
     updateRemoveButton();
     updateAddButton();
