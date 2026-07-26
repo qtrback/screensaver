@@ -348,12 +348,12 @@ const ShapeFactory = (() => {
 
   const _geoNames = [..._geometries.keys()];
 
-  /* Vibrant palette — distinct, saturated colors */
+  /* Pastel palette — soft, light, low-saturation distinct tones */
   const _colors = [
-    0xff4d6d, 0xff9f43, 0xfeca57, 0x1dd1a1, 0x54a0ff,
-    0xa29bfe, 0xfd79a8, 0x00cec9, 0x6c5ce7, 0xff6b6b,
-    0x48dbfb, 0xff9ff3, 0x00b894, 0xfdcb6e, 0xe17055,
-    0x74b9ff, 0xd63031, 0x0984e3, 0x00b894, 0xe84393,
+    0xffb3ba, 0xffc5a8, 0xffe0a3, 0xfff3b0, 0xe6f5a3,
+    0xc1e8b0, 0xa8e6cf, 0xa3e4e0, 0xa8d8f0, 0xaec6f0,
+    0xbcbdf0, 0xd0bdf0, 0xe4bdf0, 0xf0bde4, 0xf0bdcf,
+    0xffb8c6, 0xd8e8b0, 0xb0e0d0, 0xc8d0f0, 0xf0c8d8,
   ];
 
   let _colorIndex = 0;
@@ -391,8 +391,8 @@ const ShapeFactory = (() => {
       const color = pickColor();
       const material = new THREE.MeshStandardMaterial({
         color,
-        metalness: 0.25 + Math.random() * 0.5,
-        roughness: 0.2 + Math.random() * 0.4,
+        metalness: 0.0 + Math.random() * 0.1,
+        roughness: 0.7 + Math.random() * 0.25,
         transparent: true,
         opacity: 0.82 + Math.random() * 0.16,
       });
@@ -600,12 +600,12 @@ function createCow(bounds) {
   scene.add(keyLight);
 
   // Rim light — colored accent from the opposite side
-  const rimLight = new THREE.DirectionalLight(0x88aaff, 0.55);
+  const rimLight = new THREE.DirectionalLight(0xcfe0ff, 0.3);
   rimLight.position.set(-5, -3, -4);
   scene.add(rimLight);
 
   // Fill light — warm underlight
-  const fillLight = new THREE.PointLight(0xff6633, 0.5, 30);
+  const fillLight = new THREE.PointLight(0xffd9c2, 0.4, 30);
   fillLight.position.set(0, -6, 2);
   scene.add(fillLight);
 
@@ -975,7 +975,7 @@ function createCow(bounds) {
     }
 
     /* Animate fill light color for subtle mood shift */
-    fillLight.color.setHSL((Date.now() * 0.0001) % 1, 0.7, 0.4);
+    fillLight.color.setHSL((Date.now() * 0.0001) % 1, 0.25, 0.75);
 
     renderer.render(scene, camera);
   }
