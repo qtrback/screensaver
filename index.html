@@ -113,8 +113,9 @@
       pointer-events: none;
     }
 
-    /* Intent label toggle */
-    #btn-labels {
+    /* Intent label toggle + theme toggle (same button family) */
+    #btn-labels,
+    #btn-theme {
       border-radius: 10px;
       border: 1px solid rgba(255, 255, 255, 0.2);
       background: rgba(255, 255, 255, 0.06);
@@ -127,7 +128,8 @@
       transition: background 0.2s, color 0.2s;
     }
 
-    #btn-labels:hover {
+    #btn-labels:hover,
+    #btn-theme:hover {
       background: rgba(255, 255, 255, 0.14);
       color: #fff;
     }
@@ -167,6 +169,64 @@
       transition: opacity 0.4s;
       z-index: 50;
     }
+
+    /* ── Light theme overrides ──────────────────────────────────────────
+       Applied via body.theme-light, toggled at runtime by JS. Dark theme
+       (the default, unconditional on load) is everything above, untouched. */
+    body.theme-light {
+      background: #f2f0ea;
+    }
+
+    body.theme-light .ui-badge {
+      background: rgba(20, 18, 14, 0.06);
+      border: 1px solid rgba(20, 18, 14, 0.18);
+      color: rgba(20, 18, 14, 0.75);
+    }
+
+    body.theme-light #shape-count {
+      color: rgba(20, 18, 14, 0.9);
+    }
+
+    body.theme-light #btn-add,
+    body.theme-light #btn-remove {
+      border: 1.5px solid rgba(20, 18, 14, 0.3);
+      background: rgba(20, 18, 14, 0.07);
+      color: #201c14;
+    }
+
+    body.theme-light #btn-add:hover {
+      background: rgba(20, 18, 14, 0.14);
+      border-color: rgba(20, 18, 14, 0.55);
+    }
+
+    body.theme-light #btn-remove:hover:not(:disabled) {
+      background: rgba(200, 60, 40, 0.16);
+      border-color: rgba(200, 60, 40, 0.5);
+    }
+
+    body.theme-light #btn-labels,
+    body.theme-light #btn-theme {
+      border: 1px solid rgba(20, 18, 14, 0.22);
+      background: rgba(20, 18, 14, 0.05);
+      color: rgba(20, 18, 14, 0.65);
+    }
+
+    body.theme-light #btn-labels:hover,
+    body.theme-light #btn-theme:hover {
+      background: rgba(20, 18, 14, 0.12);
+      color: #14120e;
+    }
+
+    body.theme-light .intent-label {
+      color: rgba(20, 18, 14, 0.85);
+      background: rgba(255, 255, 255, 0.7);
+    }
+
+    body.theme-light .cow-message {
+      color: #201c14;
+      background: rgba(255, 255, 255, 0.85);
+      border: 1px solid rgba(20, 18, 14, 0.2);
+    }
   </style>
 </head>
 <body>
@@ -176,6 +236,7 @@
 <!-- UI controls -->
 <div id="ui">
   <div class="ui-badge" id="shape-count">Shapes: 1</div>
+  <button id="btn-theme">light mode</button>
   <button id="btn-labels">labels on</button>
   <button id="btn-remove" title="Remove shape">&#x2212;</button>
   <button id="btn-add" title="Add shape">+</button>
@@ -348,7 +409,7 @@ const ShapeFactory = (() => {
 
   const _geoNames = [..._geometries.keys()];
 
-  /* Pastel palette — soft, light, low-saturation distinct tones */
+  /* Pastel palette — soft, light, low-saturation distinct tones (dark-theme default) */
   const _colors = [
     0xffb3ba, 0xffc5a8, 0xffe0a3, 0xfff3b0, 0xe6f5a3,
     0xc1e8b0, 0xa8e6cf, 0xa3e4e0, 0xa8d8f0, 0xaec6f0,
@@ -356,11 +417,13 @@ const ShapeFactory = (() => {
     0xffb8c6, 0xd8e8b0, 0xb0e0d0, 0xc8d0f0, 0xf0c8d8,
   ];
 
+  // Active palette used at spawn time — swapped by the theme system via setPalette().
+  let _activePalette = _colors;
   let _colorIndex = 0;
 
   function pickColor() {
-    // Cycle through palette so consecutive shapes have distinct colors
-    const c = _colors[_colorIndex % _colors.length];
+    // Cycle through the active palette so consecutive shapes have distinct colors
+    const c = _activePalette[_colorIndex % _activePalette.length];
     _colorIndex++;
     return c;
   }
@@ -377,6 +440,15 @@ const ShapeFactory = (() => {
     },
 
     /**
+     * Swap the active color palette (used by the theme system). Only affects
+     * shapes created AFTER this call — existing shapes are recolored separately.
+     * @param {number[]} colors
+     */
+    setPalette(colors) {
+      _activePalette = colors;
+    },
+
+    /**
      * Create a new Three.js mesh with random geometry and color.
      * The label string is the geometry name so labels still render.
      * @param {{ x, y, z }} bounds   - spawn within bounds
@@ -388,6 +460,7 @@ const ShapeFactory = (() => {
       const geometry = _geometries.get(geoName)();
 
       // Material — slightly transparent, physically-based
+      const colorIndex = _colorIndex % _activePalette.length;
       const color = pickColor();
       const material = new THREE.MeshStandardMaterial({
         color,
@@ -398,6 +471,9 @@ const ShapeFactory = (() => {
       });
 
       const mesh = new THREE.Mesh(geometry, material);
+      // Remember which palette slot this shape used so the theme system can
+      // re-derive its color from the new palette on a live theme switch.
+      mesh.userData.colorIndex = colorIndex;
 
       // Random spawn position (inside bounds with a margin)
       mesh.position.set(
@@ -432,15 +508,31 @@ const ShapeFactory = (() => {
    scale then shrunk down so it reads as visibly smaller than the regular
    ShapeFactory shapes (which run ~0.5-0.9 units). */
 
-function createCow(bounds) {
+function createCow(bounds, cowColors) {
   const group = new THREE.Group();
 
-  const white  = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, metalness: 0.05 });
-  const pink   = new THREE.MeshStandardMaterial({ color: 0xffb6c9, roughness: 0.5, metalness: 0.05 });
-  const black  = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5, metalness: 0.1 });
-  const brown  = new THREE.MeshStandardMaterial({ color: 0x4a2f1c, roughness: 0.6, metalness: 0.05 });
-  const gold   = new THREE.MeshStandardMaterial({ color: 0xffd23f, roughness: 0.3, metalness: 0.5 });
-  const gray   = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.4, metalness: 0.1, transparent: true, opacity: 0.85 });
+  // Cow material palette — theme-aware. Falls back to the dark-theme (current)
+  // values if no theme palette is supplied, so behavior is unchanged by default.
+  const cc = cowColors || {
+    white: 0xffffff, pink: 0xffb6c9, black: 0x1a1a1a,
+    brown: 0x4a2f1c, gold: 0xffd23f, gray: 0xeeeeee,
+  };
+
+  const white  = new THREE.MeshStandardMaterial({ color: cc.white, roughness: 0.6, metalness: 0.05 });
+  const pink   = new THREE.MeshStandardMaterial({ color: cc.pink, roughness: 0.5, metalness: 0.05 });
+  const black  = new THREE.MeshStandardMaterial({ color: cc.black, roughness: 0.5, metalness: 0.1 });
+  const brown  = new THREE.MeshStandardMaterial({ color: cc.brown, roughness: 0.6, metalness: 0.05 });
+  const gold   = new THREE.MeshStandardMaterial({ color: cc.gold, roughness: 0.3, metalness: 0.5 });
+  const gray   = new THREE.MeshStandardMaterial({ color: cc.gray, roughness: 0.4, metalness: 0.1, transparent: true, opacity: 0.85 });
+
+  // Tag each material with its logical cow-part name so a live theme switch
+  // can traverse the group and re-derive colors from the new theme's cowColors.
+  white.userData.cowPart  = 'white';
+  pink.userData.cowPart   = 'pink';
+  black.userData.cowPart  = 'black';
+  brown.userData.cowPart  = 'brown';
+  gold.userData.cowPart   = 'gold';
+  gray.userData.cowPart   = 'gray';
 
   /* Body -- horizontal oval barrel */
   const body = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 2.0, 16), white);
@@ -569,6 +661,76 @@ function createCow(bounds) {
    Three.js scene setup, animation loop, UI controls.
    ══════════════════════════════════════════════════════════════════════════════ */
 
+/* ══════════════════════════════════════════════════════════════════════
+   THEME SYSTEM — two named themes (dark / light) covering every
+   color-bearing surface, CSS-driven and WebGL-driven. Dark reproduces the
+   original hardwired look byte-for-byte; light is a legible dark-on-light
+   variant. Default is always dark, unconditionally (no prefers-color-scheme,
+   no persistence — see main()).
+   ══════════════════════════════════════════════════════════════════════ */
+
+const THEMES = {
+  dark: {
+    clearColor: 0x000000,
+    fogColor: 0x000000,
+    lights: {
+      ambient: { color: 0xffffff, intensity: 0.35 },
+      key:     { color: 0xffffff, intensity: 1.1 },
+      rim:     { color: 0xcfe0ff, intensity: 0.3 },
+      fill:    { color: 0xffd9c2, intensity: 0.4 },
+    },
+    // Params for the per-frame fill-light "mood" HSL animation (hue still
+    // sweeps every frame; saturation/lightness are theme-keyed so switching
+    // themes visibly changes the fill light instead of it being clobbered
+    // back to the dark-mode mood on the next tick).
+    fillMoodHSL: { s: 0.25, l: 0.75 },
+    starColor: 0xffffff,
+    // Existing 20-color pastel palette — unchanged.
+    palette: [
+      0xffb3ba, 0xffc5a8, 0xffe0a3, 0xfff3b0, 0xe6f5a3,
+      0xc1e8b0, 0xa8e6cf, 0xa3e4e0, 0xa8d8f0, 0xaec6f0,
+      0xbcbdf0, 0xd0bdf0, 0xe4bdf0, 0xf0bde4, 0xf0bdcf,
+      0xffb8c6, 0xd8e8b0, 0xb0e0d0, 0xc8d0f0, 0xf0c8d8,
+    ],
+    // Existing cow material colors — unchanged.
+    cowColors: {
+      white: 0xffffff, pink: 0xffb6c9, black: 0x1a1a1a,
+      brown: 0x4a2f1c, gold: 0xffd23f, gray: 0xeeeeee,
+    },
+  },
+  light: {
+    clearColor: 0xf2f0ea,
+    fogColor: 0xf2f0ea, // matches the off-white background so depth-fade blends in
+    lights: {
+      // Brighter, warmer key + softer ambient; a dark-tinted rim light adds
+      // edge contrast against the off-white background rather than washing
+      // shapes out.
+      ambient: { color: 0xffffff, intensity: 0.55 },
+      key:     { color: 0xfff4e0, intensity: 1.0 },
+      rim:     { color: 0x33415c, intensity: 0.45 },
+      fill:    { color: 0xff8a5c, intensity: 0.35 },
+    },
+    // Deeper, more saturated mood tones so the fill light reads against
+    // off-white instead of washing out like the pastel dark-mode mood would.
+    fillMoodHSL: { s: 0.45, l: 0.45 },
+    // Dark-toned stars — visible against off-white (0xffffff would be invisible).
+    starColor: 0x2a2620,
+    // Deeper / higher-saturation object palette so shapes read against off-white.
+    palette: [
+      0xd6304c, 0xe0602a, 0xd98c1a, 0xc9a227, 0x8fae2f,
+      0x4f9a4a, 0x2f9e6f, 0x2f9c95, 0x2f83b0, 0x3f66c2,
+      0x5b52c9, 0x7d3fc9, 0x9c3fc0, 0xc23f9e, 0xc23f6e,
+      0xd63f5a, 0x7a9e2f, 0x2f9e82, 0x3f5ec2, 0xc23f7a,
+    ],
+    // Deepened cow materials for legibility against off-white.
+    cowColors: {
+      white: 0xd9c9a3, pink: 0xd45777, black: 0x1a1a1a,
+      brown: 0x3a2415, gold: 0xcf9a1e, gray: 0x8a8478,
+    },
+  },
+};
+
+
 (function main() {
   /* ── Scene ──────────────────────────────────────────────────────────────── */
   const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -614,6 +776,7 @@ function createCow(bounds) {
   const BOUNDS = { x: 8, y: 5, z: 5 };
 
   /* ── Background star field ──────────────────────────────────────────────── */
+  let starMat;
   (function addStars() {
     const count = 600;
     const positions = new Float32Array(count * 3);
@@ -622,7 +785,7 @@ function createCow(bounds) {
     }
     const starGeo = new THREE.BufferGeometry();
     starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.12, sizeAttenuation: true });
+    starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.12, sizeAttenuation: true });
     scene.add(new THREE.Points(starGeo, starMat));
   })();
 
@@ -636,6 +799,12 @@ function createCow(bounds) {
   const COW_CHANCE = 0.12;   // ~1 in 8 chance the cow spawns on any Add
   const COLLISION_RADIUS = 0.6;
   let showLabels = true;
+
+  /* ── Theme state ───────────────────────────────────────────────────────
+     Default is ALWAYS 'dark' — unconditional, no prefers-color-scheme query,
+     no persistence read. */
+  let activeTheme = 'dark';
+  ShapeFactory.setPalette(THEMES[activeTheme].palette);
 
   /* ── Label creation ─────────────────────────────────────────────────────── */
   function createLabel(mesh) {
@@ -706,7 +875,7 @@ function createCow(bounds) {
   function spawnCow() {
     if (shapes.length >= MAX_SHAPES || cowActive()) return;
 
-    const group = createCow(BOUNDS);
+    const group = createCow(BOUNDS, THEMES[activeTheme].cowColors);
     group.userData.intent  = 'cow';
     group.userData.geoName = 'cow';
 
@@ -790,6 +959,75 @@ function createCow(bounds) {
     showLabels = !showLabels;
     btnLabels.textContent = showLabels ? 'labels on' : 'labels off';
     labels.forEach(l => { l.el.style.opacity = showLabels ? '1' : '0'; });
+  });
+
+  /* ── Theme toggle ──────────────────────────────────────────────────────
+     Switches the active theme and re-applies EVERY color surface live, in
+     place, with no reload / re-init:
+       - CSS surfaces: toggled via body.theme-light class
+       - WebGL surfaces: renderer clear color, fog color, all four lights,
+         star material, and every live shape's material color (traversing
+         group children for the cow) are mutated directly on the running
+         Three.js objects.
+     Newly-spawned shapes read the active palette via ShapeFactory.setPalette. */
+  function recolorLiveShapes(theme) {
+    shapes.forEach(obj => {
+      if (obj.isGroup) {
+        // Cow group — traverse children and re-derive color from cowPart tag.
+        obj.traverse(child => {
+          if (child.material && child.material.userData && child.material.userData.cowPart) {
+            const part = child.material.userData.cowPart;
+            const hex = theme.cowColors[part];
+            if (hex !== undefined) child.material.color.setHex(hex);
+          }
+        });
+      } else if (obj.material) {
+        // Regular ShapeFactory mesh — re-derive color from its palette slot.
+        const idx = obj.userData.colorIndex;
+        const hex = (typeof idx === 'number') ? theme.palette[idx % theme.palette.length] : theme.palette[0];
+        obj.material.color.setHex(hex);
+      }
+    });
+  }
+
+  function applyTheme(name) {
+    activeTheme = name;
+    const theme = THEMES[name];
+
+    // CSS-driven surfaces
+    document.body.classList.toggle('theme-light', name === 'light');
+
+    // WebGL-driven surfaces
+    renderer.setClearColor(theme.clearColor, 1);
+    scene.fog.color.setHex(theme.fogColor); // density (0.018) untouched
+
+    ambient.color.setHex(theme.lights.ambient.color);
+    ambient.intensity = theme.lights.ambient.intensity;
+
+    keyLight.color.setHex(theme.lights.key.color);
+    keyLight.intensity = theme.lights.key.intensity;
+
+    rimLight.color.setHex(theme.lights.rim.color);
+    rimLight.intensity = theme.lights.rim.intensity;
+
+    // fillLight's hue is animated every frame in animate(); set its base
+    // color now (so it changes immediately) and let the mood loop use the
+    // theme's saturation/lightness going forward (see animate()).
+    fillLight.color.setHex(theme.lights.fill.color);
+    fillLight.intensity = theme.lights.fill.intensity;
+
+    starMat.color.setHex(theme.starColor);
+
+    // Spawn-time palette for new shapes, and live-recolor existing ones.
+    ShapeFactory.setPalette(theme.palette);
+    recolorLiveShapes(theme);
+  }
+
+  const btnTheme = document.getElementById('btn-theme');
+  btnTheme.addEventListener('click', () => {
+    const next = activeTheme === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    btnTheme.textContent = next === 'light' ? 'dark mode' : 'light mode';
   });
 
   /* ── Cursor auto-hide after inactivity ──────────────────────────────────── */
@@ -974,8 +1212,11 @@ function createCow(bounds) {
       });
     }
 
-    /* Animate fill light color for subtle mood shift */
-    fillLight.color.setHSL((Date.now() * 0.0001) % 1, 0.25, 0.75);
+    /* Animate fill light color for subtle mood shift — saturation/lightness
+       are theme-keyed (via applyTheme) so switching themes doesn't get
+       clobbered back to the dark-mode mood on the next frame. */
+    const mood = THEMES[activeTheme].fillMoodHSL;
+    fillLight.color.setHSL((Date.now() * 0.0001) % 1, mood.s, mood.l);
 
     renderer.render(scene, camera);
   }
