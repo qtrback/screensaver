@@ -692,6 +692,132 @@ function createCow(bounds, cowColors) {
 }
 
 
+/* ─────────────────────────────────────────────────────────────────────
+   createClown(bounds, clownColors) — the clown easter-egg, a first-class
+   peer of the cow. Built from THREE primitives only (Cone/Sphere/Cylinder/
+   Box) + MeshStandardMaterial, mirroring createCow. Each material is tagged
+   with material.userData.clownPart so a live theme switch can re-derive its
+   color from the active theme's clownColors palette.
+   ───────────────────────────────────────────────────────────────────── */
+function createClown(bounds, clownColors) {
+  const group = new THREE.Group();
+
+  // Clown material palette — theme-aware. Falls back to the dark-theme
+  // values if no theme palette is supplied, so behavior is unchanged by
+  // default (exactly like createCow's cc fallback).
+  const cc = clownColors || {
+    hat: 0x8a2be2, nose: 0xff2d2d, face: 0xfff4e8,
+    suit: 0x1e90ff, ruffle: 0xffe14d, shoe: 0xff8c1a,
+  };
+
+  const hatMat    = new THREE.MeshStandardMaterial({ color: cc.hat, roughness: 0.5, metalness: 0.1 });
+  const noseMat   = new THREE.MeshStandardMaterial({ color: cc.nose, roughness: 0.35, metalness: 0.05 });
+  const faceMat   = new THREE.MeshStandardMaterial({ color: cc.face, roughness: 0.6, metalness: 0.05 });
+  const suitMat   = new THREE.MeshStandardMaterial({ color: cc.suit, roughness: 0.55, metalness: 0.05 });
+  const ruffleMat = new THREE.MeshStandardMaterial({ color: cc.ruffle, roughness: 0.45, metalness: 0.1 });
+  const shoeMat   = new THREE.MeshStandardMaterial({ color: cc.shoe, roughness: 0.5, metalness: 0.05 });
+
+  // Tag each material with its logical clown-part name so a live theme
+  // switch can traverse the group and re-derive colors from clownColors.
+  hatMat.userData.clownPart    = 'hat';
+  noseMat.userData.clownPart   = 'nose';
+  faceMat.userData.clownPart   = 'face';
+  suitMat.userData.clownPart   = 'suit';
+  ruffleMat.userData.clownPart = 'ruffle';
+  shoeMat.userData.clownPart   = 'shoe';
+
+  /* Head/face — big pale sphere */
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.7, 20, 16), faceMat);
+  head.position.set(0, 0.9, 0);
+  group.add(head);
+
+  /* Red nose — a small red sphere on the face-front */
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 12), noseMat);
+  nose.position.set(0, 0.85, 0.68);
+  group.add(nose);
+
+  /* Eyes — small suit-colored spheres */
+  [-0.28, 0.28].forEach(xOff => {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), suitMat);
+    eye.position.set(xOff, 1.02, 0.62);
+    group.add(eye);
+  });
+
+  /* Cheeks — two little red dabs for extra clown flair */
+  [-0.42, 0.42].forEach(xOff => {
+    const cheek = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), noseMat);
+    cheek.position.set(xOff, 0.78, 0.55);
+    cheek.scale.set(1, 0.7, 0.5);
+    group.add(cheek);
+  });
+
+  /* Pointed hat — a tall cone on top of the head */
+  const hat = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.1, 18), hatMat);
+  hat.position.set(0, 1.85, 0);
+  group.add(hat);
+
+  /* Hat pom-pom — a ruffle-colored sphere at the tip */
+  const pom = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), ruffleMat);
+  pom.position.set(0, 2.5, 0);
+  group.add(pom);
+
+  /* Ruffle collar — a ring of small ruffle-colored cones at the neck */
+  const ruffleCount = 10;
+  for (let i = 0; i < ruffleCount; i++) {
+    const a = (i / ruffleCount) * Math.PI * 2;
+    const petal = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.32, 8), ruffleMat);
+    petal.position.set(Math.cos(a) * 0.55, 0.28, Math.sin(a) * 0.55);
+    petal.rotation.z = Math.PI / 2;
+    petal.rotation.y = -a;
+    group.add(petal);
+  }
+
+  /* Body/suit — a colorful barrel torso */
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.62, 1.1, 16), suitMat);
+  body.position.set(0, -0.35, 0);
+  group.add(body);
+
+  /* Suit buttons — ruffle-colored dots down the front */
+  [0.1, -0.25, -0.6].forEach(y => {
+    const button = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), ruffleMat);
+    button.position.set(0, y, 0.5);
+    group.add(button);
+  });
+
+  /* Arms — two suit-colored cylinders angled out from the shoulders */
+  [-1, 1].forEach(side => {
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.9, 10), suitMat);
+    arm.position.set(side * 0.62, -0.1, 0);
+    arm.rotation.z = side * 0.9;
+    group.add(arm);
+
+    /* Face-colored hand at the end of each arm */
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), faceMat);
+    hand.position.set(side * 1.0, -0.5, 0);
+    group.add(hand);
+  });
+
+  /* Legs — two short suit-colored cylinders */
+  [-0.28, 0.28].forEach(xOff => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.7, 10), suitMat);
+    leg.position.set(xOff, -1.25, 0);
+    group.add(leg);
+  });
+
+  /* Big shoes — oversized flattened boxes at the bottom */
+  [-0.28, 0.28].forEach(xOff => {
+    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.24, 0.9), shoeMat);
+    shoe.position.set(xOff, -1.68, 0.28);
+    group.add(shoe);
+  });
+
+  /* Scale the whole clown down so it reads at the same size as the cow. */
+  group.scale.set(0.32, 0.32, 0.32);
+
+  return group;
+}
+
+
 /* ══════════════════════════════════════════════════════════════════════════════
    SECTION 4 — MAIN APPLICATION
    ─────────────────────────────────────────────────────────────────────────────
@@ -734,6 +860,11 @@ const THEMES = {
       white: 0xffffff, pink: 0xffb6c9, black: 0x1a1a1a,
       brown: 0x4a2f1c, gold: 0xffd23f, gray: 0xeeeeee,
     },
+    // Clown material colors — bright/saturated for the dark background.
+    clownColors: {
+      hat: 0x8a2be2, nose: 0xff2d2d, face: 0xfff4e8,
+      suit: 0x1e90ff, ruffle: 0xffe14d, shoe: 0xff8c1a,
+    },
   },
   light: {
     clearColor: 0xf2f0ea,
@@ -763,6 +894,11 @@ const THEMES = {
     cowColors: {
       white: 0xd9c9a3, pink: 0xd45777, black: 0x1a1a1a,
       brown: 0x3a2415, gold: 0xcf9a1e, gray: 0x8a8478,
+    },
+    // Deepened clown materials for legibility against off-white.
+    clownColors: {
+      hat: 0x5f1eaa, nose: 0xc41f1f, face: 0xd9c9a3,
+      suit: 0x1f6bb0, ruffle: 0xc9a227, shoe: 0xc26a12,
     },
   },
 };
@@ -877,6 +1013,10 @@ const THEMES = {
     return shapes.some(s => s.userData && s.userData.geoName === 'cow');
   }
 
+  function clownActive() {
+    return shapes.some(s => s.userData && s.userData.geoName === 'clown');
+  }
+
   function updateShapeCount() {
     document.getElementById('shape-count').textContent = `Shapes: ${shapes.length}`;
   }
@@ -914,12 +1054,22 @@ const THEMES = {
   function spawnShape() {
     if (shapes.length >= MAX_SHAPES) return;
 
-    // The cow is a rare surprise: on every Add there's a small random chance
-    // it appears instead of a normal shape — eligible at any count (even the
-    // first), never guaranteed, at most one at a time.
-    if (!cowActive() && Math.random() < COW_CHANCE) {
-      spawnCow();
-      return;
+    // A special character is a rare surprise: on every Add there's a small
+    // random chance one appears instead of a normal shape — eligible at any
+    // count (even the first), never guaranteed, at most one of each type at a
+    // time. When it fires, the clown-vs-cow choice is a fresh random draw with
+    // NO fixed precedence; if the chosen one is already live we fall through
+    // to the other.
+    if (Math.random() < COW_CHANCE) {
+      const wantClown = Math.random() < 0.5;
+      if (wantClown) {
+        if (!clownActive())    { spawnClown(); return; }
+        else if (!cowActive()) { spawnCow();   return; }
+      } else {
+        if (!cowActive())        { spawnCow();   return; }
+        else if (!clownActive()) { spawnClown(); return; }
+      }
+      // Both specials already live — fall through to a normal shape.
     }
 
     const { mesh, intent, geoName } = ShapeFactory.create(BOUNDS);
@@ -971,6 +1121,51 @@ const THEMES = {
     const el = document.createElement('div');
     el.className = 'cow-message';
     el.textContent = 'You found a cow in space! 🐄';
+    document.body.appendChild(el);
+    // fade in
+    requestAnimationFrame(() => { el.style.opacity = '1'; });
+    // fade out and remove after a few seconds
+    setTimeout(() => {
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 400);
+    }, 3200);
+  }
+
+  function spawnClown() {
+    if (shapes.length >= MAX_SHAPES || clownActive()) return;
+
+    const group = createClown(BOUNDS, THEMES[activeTheme].clownColors);
+    group.userData.intent  = 'clown';
+    group.userData.geoName = 'clown';
+
+    group.position.set(
+      (Math.random() - 0.5) * BOUNDS.x * 0.8,
+      (Math.random() - 0.5) * BOUNDS.y * 0.8,
+      (Math.random() - 0.5) * BOUNDS.z * 0.6,
+    );
+    group.rotation.set(
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+    );
+
+    scene.add(group);
+    shapes.push(group);
+    intentEngine.assign(group, 'clown');
+    createLabel(group);
+    showClownMessage();
+
+    incrementTypeCount('clown');
+
+    updateShapeCount();
+    updateRemoveButton();
+    updateAddButton();
+  }
+
+  function showClownMessage() {
+    const el = document.createElement('div');
+    el.className = 'cow-message';
+    el.textContent = 'A clown appeared! 🤡';
     document.body.appendChild(el);
     // fade in
     requestAnimationFrame(() => { el.style.opacity = '1'; });
@@ -1039,11 +1234,16 @@ const THEMES = {
   function recolorLiveShapes(theme) {
     shapes.forEach(obj => {
       if (obj.isGroup) {
-        // Cow group — traverse children and re-derive color from cowPart tag.
+        // Cow/clown group — traverse children and re-derive color from the
+        // material's part tag (cowPart -> cowColors, clownPart -> clownColors).
         obj.traverse(child => {
           if (child.material && child.material.userData && child.material.userData.cowPart) {
             const part = child.material.userData.cowPart;
             const hex = theme.cowColors[part];
+            if (hex !== undefined) child.material.color.setHex(hex);
+          } else if (child.material && child.material.userData && child.material.userData.clownPart) {
+            const part = child.material.userData.clownPart;
+            const hex = theme.clownColors[part];
             if (hex !== undefined) child.material.color.setHex(hex);
           }
         });
