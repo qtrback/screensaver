@@ -59,6 +59,31 @@
       color: rgba(255, 255, 255, 0.85);
     }
 
+    /* ── Cumulative Type Counts panel (top-left, session-only) ───────────── */
+    #type-counts {
+      position: fixed;
+      top: 24px;
+      left: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      z-index: 100;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(12px);
+      border-radius: 12px;
+      padding: 8px 14px;
+    }
+
+    #type-counts:empty { display: none; }
+
+    .type-count-row {
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
     /* Add-shape button */
     #btn-add {
       width: 48px;
@@ -187,6 +212,15 @@
       color: rgba(20, 18, 14, 0.9);
     }
 
+    body.theme-light #type-counts {
+      background: rgba(20, 18, 14, 0.06);
+      border: 1px solid rgba(20, 18, 14, 0.18);
+    }
+
+    body.theme-light .type-count-row {
+      color: rgba(20, 18, 14, 0.9);
+    }
+
     body.theme-light #btn-add,
     body.theme-light #btn-remove {
       border: 1.5px solid rgba(20, 18, 14, 0.3);
@@ -232,6 +266,9 @@
 <body>
 
 <div id="canvas-container"></div>
+
+<!-- Cumulative per-type appearance counts (session-only, top-left) -->
+<div id="type-counts"></div>
 
 <!-- UI controls -->
 <div id="ui">
@@ -844,6 +881,31 @@ const THEMES = {
     document.getElementById('shape-count').textContent = `Shapes: ${shapes.length}`;
   }
 
+  /* ── Cumulative per-type appearance counter ──────────────────────────
+     Session-only, in-memory tally of how many times each object type has
+     SPAWNED (never decremented on removal). Keyed by the same geoName
+     string used by ShapeFactory.create() / spawnCow(). Not persisted to
+     any web storage — resets on reload. */
+  const typeCounts = {};
+
+  function incrementTypeCount(geoName) {
+    typeCounts[geoName] = (typeCounts[geoName] || 0) + 1;
+    updateTypeCounts();
+  }
+
+  function updateTypeCounts() {
+    const el = document.getElementById('type-counts');
+    el.innerHTML = '';
+    Object.keys(typeCounts).forEach(geoName => {
+      const count = typeCounts[geoName];
+      if (!count || count <= 0) return; // only show types that have appeared
+      const row = document.createElement('div');
+      row.className = 'type-count-row';
+      row.textContent = `${geoName}: ${count}`;
+      el.appendChild(row);
+    });
+  }
+
   function updateAddButton() {
     document.getElementById('btn-add').disabled = shapes.length >= MAX_SHAPES;
   }
@@ -860,12 +922,14 @@ const THEMES = {
       return;
     }
 
-    const { mesh, intent } = ShapeFactory.create(BOUNDS);
+    const { mesh, intent, geoName } = ShapeFactory.create(BOUNDS);
 
     scene.add(mesh);
     shapes.push(mesh);
     intentEngine.assign(mesh, intent);
     createLabel(mesh);
+
+    incrementTypeCount(geoName);
 
     updateShapeCount();
     updateRemoveButton();
@@ -895,6 +959,8 @@ const THEMES = {
     intentEngine.assign(group, 'cow');
     createLabel(group);
     showCowMessage();
+
+    incrementTypeCount('cow');
 
     updateShapeCount();
     updateRemoveButton();
