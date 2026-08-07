@@ -818,6 +818,127 @@ function createClown(bounds, clownColors) {
 }
 
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   createBaby(bounds, babyColors) — the baby easter-egg, a first-class peer
+   of createCow and createClown. Built from THREE primitives only (Sphere/
+   Box/Cylinder/Cone) + MeshStandardMaterial, mirroring createCow/createClown.
+   Each material is tagged with material.userData.babyPart so a live theme
+   switch can re-derive its color from the active theme's babyColors palette.
+   ───────────────────────────────────────────────────────────────────────────── */
+function createBaby(bounds, babyColors) {
+  const group = new THREE.Group();
+
+  // Baby material palette — theme-aware. Falls back to the dark-theme
+  // values if no theme palette is supplied, so behavior is unchanged by
+  // default (exactly like createCow/createClown's cc fallback).
+  const cc = babyColors || {
+    skin: 0xffcc99, diaper: 0xffffff, hair: 0x8b4513,
+    cheek: 0xffb3ba, eye: 0x1a1a1a, pacifier: 0xff6699,
+  };
+
+  const skinMat     = new THREE.MeshStandardMaterial({ color: cc.skin,     roughness: 0.6,  metalness: 0.05 });
+  const diaperMat   = new THREE.MeshStandardMaterial({ color: cc.diaper,   roughness: 0.5,  metalness: 0.05 });
+  const hairMat     = new THREE.MeshStandardMaterial({ color: cc.hair,     roughness: 0.55, metalness: 0.05 });
+  const cheekMat    = new THREE.MeshStandardMaterial({ color: cc.cheek,    roughness: 0.5,  metalness: 0.05 });
+  const eyeMat      = new THREE.MeshStandardMaterial({ color: cc.eye,      roughness: 0.4,  metalness: 0.1  });
+  const pacifierMat = new THREE.MeshStandardMaterial({ color: cc.pacifier, roughness: 0.4,  metalness: 0.1  });
+
+  // Tag each material with its logical baby-part name so a live theme
+  // switch can traverse the group and re-derive colors from babyColors.
+  skinMat.userData.babyPart     = 'skin';
+  diaperMat.userData.babyPart   = 'diaper';
+  hairMat.userData.babyPart     = 'hair';
+  cheekMat.userData.babyPart    = 'cheek';
+  eyeMat.userData.babyPart      = 'eye';
+  pacifierMat.userData.babyPart = 'pacifier';
+
+  /* Big round head — oversized sphere, baby-proportioned */
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.75, 20, 16), skinMat);
+  head.position.set(0, 0.85, 0);
+  group.add(head);
+
+  /* Chubby cheeks — two flattened pink spheres on sides of face */
+  [-0.55, 0.55].forEach(xOff => {
+    const cheek = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), cheekMat);
+    cheek.position.set(xOff, 0.72, 0.58);
+    cheek.scale.set(0.9, 0.7, 0.55);
+    group.add(cheek);
+  });
+
+  /* Eyes — small dark spheres */
+  [-0.28, 0.28].forEach(xOff => {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 10), eyeMat);
+    eye.position.set(xOff, 0.98, 0.68);
+    group.add(eye);
+
+    /* tiny white highlight dot on each eye */
+    const highlight = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), diaperMat);
+    highlight.position.set(xOff + 0.04, 1.01, 0.76);
+    group.add(highlight);
+  });
+
+  /* Little curl of hair on top — two small spheres arcing upward */
+  const hairCurl = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), hairMat);
+  hairCurl.position.set(0.0, 1.6, 0.1);
+  hairCurl.scale.set(0.7, 1.1, 0.7);
+  group.add(hairCurl);
+
+  const hairCurl2 = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), hairMat);
+  hairCurl2.position.set(0.14, 1.68, 0.15);
+  hairCurl2.scale.set(0.6, 1.0, 0.6);
+  group.add(hairCurl2);
+
+  /* Pacifier — a flat cylinder shield with a colored nipple sphere */
+  const pacShield = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.06, 12), diaperMat);
+  pacShield.position.set(0, 0.62, 0.74);
+  pacShield.rotation.x = Math.PI / 2;
+  group.add(pacShield);
+
+  const pacNipple = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), pacifierMat);
+  pacNipple.position.set(0, 0.62, 0.85);
+  group.add(pacNipple);
+
+  /* Small chubby torso — a short wide cylinder */
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.48, 0.7, 16), skinMat);
+  torso.position.set(0, 0.0, 0);
+  group.add(torso);
+
+  /* Diaper — a white box at the bottom of the torso */
+  const diaper = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.5, 0.85), diaperMat);
+  diaper.position.set(0, -0.42, 0);
+  group.add(diaper);
+
+  /* Chubby arms — short skin cylinders angled outward, with round fists */
+  [-1, 1].forEach(side => {
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.13, 0.55, 10), skinMat);
+    arm.position.set(side * 0.68, 0.12, 0);
+    arm.rotation.z = side * 1.1;
+    group.add(arm);
+
+    const fist = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), skinMat);
+    fist.position.set(side * 1.0, -0.16, 0);
+    group.add(fist);
+  });
+
+  /* Chubby legs — short skin cylinders below the diaper, with round feet */
+  [-0.3, 0.3].forEach(xOff => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.17, 0.55, 10), skinMat);
+    leg.position.set(xOff, -0.85, 0);
+    group.add(leg);
+
+    const foot = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), skinMat);
+    foot.position.set(xOff, -1.16, 0.05);
+    foot.scale.set(0.85, 0.65, 1.2);
+    group.add(foot);
+  });
+
+  /* Scale the whole baby down so it reads at the same size as the cow/clown. */
+  group.scale.set(0.32, 0.32, 0.32);
+
+  return group;
+}
+
+
 /* ══════════════════════════════════════════════════════════════════════════════
    SECTION 4 — MAIN APPLICATION
    ─────────────────────────────────────────────────────────────────────────────
@@ -865,6 +986,11 @@ const THEMES = {
       hat: 0x8a2be2, nose: 0xff2d2d, face: 0xfff4e8,
       suit: 0x1e90ff, ruffle: 0xffe14d, shoe: 0xff8c1a,
     },
+    // Baby material colors — bright/saturated for the dark background.
+    babyColors: {
+      skin: 0xffcc99, diaper: 0xffffff, hair: 0x8b4513,
+      cheek: 0xff9ab2, eye: 0x1a1a1a, pacifier: 0xff6699,
+    },
   },
   light: {
     clearColor: 0xf2f0ea,
@@ -899,6 +1025,11 @@ const THEMES = {
     clownColors: {
       hat: 0x5f1eaa, nose: 0xc41f1f, face: 0xd9c9a3,
       suit: 0x1f6bb0, ruffle: 0xc9a227, shoe: 0xc26a12,
+    },
+    // Deepened baby materials for legibility against off-white.
+    babyColors: {
+      skin: 0xd4956a, diaper: 0xd9cfc0, hair: 0x5c2e0a,
+      cheek: 0xc9607a, eye: 0x1a1a1a, pacifier: 0xc42060,
     },
   },
 };
@@ -1017,6 +1148,10 @@ const THEMES = {
     return shapes.some(s => s.userData && s.userData.geoName === 'clown');
   }
 
+  function babyActive() {
+    return shapes.some(s => s.userData && s.userData.geoName === 'baby');
+  }
+
   function updateShapeCount() {
     document.getElementById('shape-count').textContent = `Shapes: ${shapes.length}`;
   }
@@ -1057,19 +1192,25 @@ const THEMES = {
     // A special character is a rare surprise: on every Add there's a small
     // random chance one appears instead of a normal shape — eligible at any
     // count (even the first), never guaranteed, at most one of each type at a
-    // time. When it fires, the clown-vs-cow choice is a fresh random draw with
-    // NO fixed precedence; if the chosen one is already live we fall through
-    // to the other.
+    // time. When it fires, pick fairly among the AVAILABLE specials with NO
+    // fixed precedence; if all are live, fall through to a normal shape.
     if (Math.random() < COW_CHANCE) {
-      const wantClown = Math.random() < 0.5;
-      if (wantClown) {
-        if (!clownActive())    { spawnClown(); return; }
-        else if (!cowActive()) { spawnCow();   return; }
-      } else {
-        if (!cowActive())        { spawnCow();   return; }
-        else if (!clownActive()) { spawnClown(); return; }
+      // Build a list of specials not yet alive, shuffle it, pick the first.
+      const available = [];
+      if (!cowActive())   available.push('cow');
+      if (!clownActive()) available.push('clown');
+      if (!babyActive())  available.push('baby');
+      // Shuffle: Fisher-Yates on the small list
+      for (let i = available.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [available[i], available[j]] = [available[j], available[i]];
       }
-      // Both specials already live — fall through to a normal shape.
+      if (available.length > 0) {
+        if (available[0] === 'cow')   { spawnCow();   return; }
+        if (available[0] === 'clown') { spawnClown(); return; }
+        if (available[0] === 'baby')  { spawnBaby();  return; }
+      }
+      // All specials already live — fall through to a normal shape.
     }
 
     const { mesh, intent, geoName } = ShapeFactory.create(BOUNDS);
@@ -1176,6 +1317,51 @@ const THEMES = {
     }, 3200);
   }
 
+  function spawnBaby() {
+    if (shapes.length >= MAX_SHAPES || babyActive()) return;
+
+    const group = createBaby(BOUNDS, THEMES[activeTheme].babyColors);
+    group.userData.intent  = 'baby';
+    group.userData.geoName = 'baby';
+
+    group.position.set(
+      (Math.random() - 0.5) * BOUNDS.x * 0.8,
+      (Math.random() - 0.5) * BOUNDS.y * 0.8,
+      (Math.random() - 0.5) * BOUNDS.z * 0.6,
+    );
+    group.rotation.set(
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+    );
+
+    scene.add(group);
+    shapes.push(group);
+    intentEngine.assign(group, 'baby');
+    createLabel(group);
+    showBabyMessage();
+
+    incrementTypeCount('baby');
+
+    updateShapeCount();
+    updateRemoveButton();
+    updateAddButton();
+  }
+
+  function showBabyMessage() {
+    const el = document.createElement('div');
+    el.className = 'cow-message';
+    el.textContent = 'A floating baby appeared! 👶';
+    document.body.appendChild(el);
+    // fade in
+    requestAnimationFrame(() => { el.style.opacity = '1'; });
+    // fade out and remove after a few seconds
+    setTimeout(() => {
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 400);
+    }, 3200);
+  }
+
   /* ── Remove a shape ─────────────────────────────────────────────────────── */
   function removeShape(mesh) {
     scene.remove(mesh);
@@ -1244,6 +1430,10 @@ const THEMES = {
           } else if (child.material && child.material.userData && child.material.userData.clownPart) {
             const part = child.material.userData.clownPart;
             const hex = theme.clownColors[part];
+            if (hex !== undefined) child.material.color.setHex(hex);
+          } else if (child.material && child.material.userData && child.material.userData.babyPart) {
+            const part = child.material.userData.babyPart;
+            const hex = theme.babyColors[part];
             if (hex !== undefined) child.material.color.setHex(hex);
           }
         });
