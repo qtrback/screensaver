@@ -1644,8 +1644,29 @@ const THEMES = {
   // Slow camera drift for screensaver feel
   let camAngle = 0;
 
+  // Accumulated mood-color time — advanced only on non-paused frames so the
+  // fillLight hue doesn't jump when resuming from a backgrounded tab.
+  let moodTime = 0;
+
+  // Tab-visibility pause/resume: while the page is hidden we still keep
+  // requestAnimationFrame scheduled (the browser throttles it for us), but
+  // the frame body early-returns before advancing any scene state or
+  // rendering. On resume we flush the clock's accumulated delta so the
+  // elapsed hidden duration never gets fed into a single dt.
+  let paused = document.hidden;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      paused = true;
+    } else {
+      clock.getDelta(); // discard time accumulated while hidden
+      paused = false;
+    }
+  });
+
   function animate() {
     requestAnimationFrame(animate);
+
+    if (paused) return;
 
     const dt = Math.min(clock.getDelta(), 0.1); // cap dt to avoid spiral on tab switch
 
@@ -1670,9 +1691,11 @@ const THEMES = {
 
     /* Animate fill light color for subtle mood shift — saturation/lightness
        are theme-keyed (via applyTheme) so switching themes doesn't get
-       clobbered back to the dark-mode mood on the next frame. */
+       clobbered back to the dark-mode mood on the next frame. moodTime is
+       dt-accumulated (not Date.now()) so it pauses/resumes cleanly. */
+    moodTime += dt;
     const mood = THEMES[activeTheme].fillMoodHSL;
-    fillLight.color.setHSL((Date.now() * 0.0001) % 1, mood.s, mood.l);
+    fillLight.color.setHSL((moodTime * 0.1) % 1, mood.s, mood.l);
 
     renderer.render(scene, camera);
   }
