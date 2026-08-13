@@ -939,6 +939,116 @@ function createBaby(bounds, babyColors) {
 }
 
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   createCar(bounds, carColors) — the flying-car easter-egg, a first-class
+   peer of createCow/createClown/createBaby. Built from THREE primitives only
+   (Box/Cylinder/Sphere/Cone) + MeshStandardMaterial, mirroring the other
+   specials. Each material is tagged with material.userData.carPart so a live
+   theme switch can re-derive its color from the active theme's carColors
+   palette.
+   ───────────────────────────────────────────────────────────────────────────── */
+function createCar(bounds, carColors) {
+  const group = new THREE.Group();
+
+  // Car material palette — theme-aware. Falls back to the dark-theme
+  // values if no theme palette is supplied, so behavior is unchanged by
+  // default (exactly like createCow/createClown/createBaby's cc fallback).
+  const cc = carColors || {
+    body: 0xff3b3b, cabin: 0xffd166, window: 0x99d9ff,
+    wheel: 0x111111, hub: 0xd9d9d9, headlight: 0xffffaa,
+    taillight: 0xff1744, flame: 0xff8c1a,
+  };
+
+  const bodyMat      = new THREE.MeshStandardMaterial({ color: cc.body,      roughness: 0.45, metalness: 0.25 });
+  const cabinMat     = new THREE.MeshStandardMaterial({ color: cc.cabin,     roughness: 0.45, metalness: 0.15 });
+  const windowMat    = new THREE.MeshStandardMaterial({ color: cc.window,    roughness: 0.18, metalness: 0.2, transparent: true, opacity: 0.85 });
+  const wheelMat     = new THREE.MeshStandardMaterial({ color: cc.wheel,     roughness: 0.65, metalness: 0.1 });
+  const hubMat       = new THREE.MeshStandardMaterial({ color: cc.hub,       roughness: 0.32, metalness: 0.45 });
+  const headlightMat = new THREE.MeshStandardMaterial({ color: cc.headlight, roughness: 0.25, metalness: 0.15 });
+  const taillightMat = new THREE.MeshStandardMaterial({ color: cc.taillight, roughness: 0.35, metalness: 0.1 });
+  const flameMat     = new THREE.MeshStandardMaterial({ color: cc.flame,     roughness: 0.25, metalness: 0.05, transparent: true, opacity: 0.9 });
+
+  // Tag each material with its logical car-part name so a live theme
+  // switch can traverse the group and re-derive colors from carColors.
+  bodyMat.userData.carPart      = 'body';
+  cabinMat.userData.carPart     = 'cabin';
+  windowMat.userData.carPart    = 'window';
+  wheelMat.userData.carPart     = 'wheel';
+  hubMat.userData.carPart       = 'hub';
+  headlightMat.userData.carPart = 'headlight';
+  taillightMat.userData.carPart = 'taillight';
+  flameMat.userData.carPart     = 'flame';
+
+  /* Body — sleek rectangular hover-car chassis */
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.55, 1.05), bodyMat);
+  body.position.set(0, 0, 0);
+  group.add(body);
+
+  /* Cabin — chunky roof block plus transparent windshield */
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.55, 0.85), cabinMat);
+  cabin.position.set(0.15, 0.48, 0);
+  group.add(cabin);
+
+  const windshield = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.36, 0.9), windowMat);
+  windshield.position.set(0.7, 0.52, 0);
+  windshield.rotation.z = -0.28;
+  group.add(windshield);
+
+  const rearWindow = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.32, 0.86), windowMat);
+  rearWindow.position.set(-0.35, 0.54, 0);
+  rearWindow.rotation.z = 0.2;
+  group.add(rearWindow);
+
+  /* Wheels — four little cylinders on the corners, rotated to face out */
+  const wheelPositions = [
+    [-0.75, -0.38, 0.58], [-0.75, -0.38, -0.58],
+    [0.75, -0.38, 0.58],  [0.75, -0.38, -0.58],
+  ];
+  wheelPositions.forEach(([x, y, z]) => {
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.23, 0.18, 16), wheelMat);
+    wheel.position.set(x, y, z);
+    wheel.rotation.x = Math.PI / 2;
+    group.add(wheel);
+
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.2, 12), hubMat);
+    hub.position.set(x, y, z + (z > 0 ? 0.02 : -0.02));
+    hub.rotation.x = Math.PI / 2;
+    group.add(hub);
+  });
+
+  /* Headlights and taillights */
+  [-0.3, 0.3].forEach(z => {
+    const headlight = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), headlightMat);
+    headlight.position.set(1.24, 0.08, z);
+    headlight.scale.set(0.6, 0.7, 1.0);
+    group.add(headlight);
+
+    const taillight = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), taillightMat);
+    taillight.position.set(-1.24, 0.02, z);
+    taillight.scale.set(0.55, 0.7, 1.0);
+    group.add(taillight);
+  });
+
+  /* Wings and rocket flame — the flying-car flourish */
+  [-1, 1].forEach(side => {
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.06, 0.28), bodyMat);
+    wing.position.set(-0.15, 0.05, side * 0.78);
+    wing.rotation.y = side * 0.16;
+    group.add(wing);
+  });
+
+  const flame = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.75, 14), flameMat);
+  flame.position.set(-1.55, -0.02, 0);
+  flame.rotation.z = Math.PI / 2;
+  group.add(flame);
+
+  /* Scale the whole car down so it reads at the same size as the cow/clown/baby. */
+  group.scale.set(0.32, 0.32, 0.32);
+
+  return group;
+}
+
+
 /* ══════════════════════════════════════════════════════════════════════════════
    SECTION 4 — MAIN APPLICATION
    ─────────────────────────────────────────────────────────────────────────────
@@ -991,6 +1101,12 @@ const THEMES = {
       skin: 0xffcc99, diaper: 0xffffff, hair: 0x8b4513,
       cheek: 0xff9ab2, eye: 0x1a1a1a, pacifier: 0xff6699,
     },
+    // Flying-car material colors — bright/saturated for the dark background.
+    carColors: {
+      body: 0xff3b3b, cabin: 0xffd166, window: 0x99d9ff,
+      wheel: 0x111111, hub: 0xd9d9d9, headlight: 0xffffaa,
+      taillight: 0xff1744, flame: 0xff8c1a,
+    },
   },
   light: {
     clearColor: 0xf2f0ea,
@@ -1030,6 +1146,12 @@ const THEMES = {
     babyColors: {
       skin: 0xd4956a, diaper: 0xd9cfc0, hair: 0x5c2e0a,
       cheek: 0xc9607a, eye: 0x1a1a1a, pacifier: 0xc42060,
+    },
+    // Deepened flying-car materials for legibility against off-white.
+    carColors: {
+      body: 0xb02020, cabin: 0xbf8f1f, window: 0x2f83b0,
+      wheel: 0x111111, hub: 0x8a8478, headlight: 0xc9a227,
+      taillight: 0xb01230, flame: 0xc26a12,
     },
   },
 };
@@ -1152,6 +1274,10 @@ const THEMES = {
     return shapes.some(s => s.userData && s.userData.geoName === 'baby');
   }
 
+  function carActive() {
+    return shapes.some(s => s.userData && s.userData.geoName === 'car');
+  }
+
   function updateShapeCount() {
     document.getElementById('shape-count').textContent = `Shapes: ${shapes.length}`;
   }
@@ -1200,6 +1326,7 @@ const THEMES = {
       if (!cowActive())   available.push('cow');
       if (!clownActive()) available.push('clown');
       if (!babyActive())  available.push('baby');
+      if (!carActive())   available.push('car');
       // Shuffle: Fisher-Yates on the small list
       for (let i = available.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -1209,6 +1336,7 @@ const THEMES = {
         if (available[0] === 'cow')   { spawnCow();   return; }
         if (available[0] === 'clown') { spawnClown(); return; }
         if (available[0] === 'baby')  { spawnBaby();  return; }
+        if (available[0] === 'car')   { spawnCar();   return; }
       }
       // All specials already live — fall through to a normal shape.
     }
@@ -1362,6 +1490,51 @@ const THEMES = {
     }, 3200);
   }
 
+  function spawnCar() {
+    if (shapes.length >= MAX_SHAPES || carActive()) return;
+
+    const group = createCar(BOUNDS, THEMES[activeTheme].carColors);
+    group.userData.intent  = 'car';
+    group.userData.geoName = 'car';
+
+    group.position.set(
+      (Math.random() - 0.5) * BOUNDS.x * 0.8,
+      (Math.random() - 0.5) * BOUNDS.y * 0.8,
+      (Math.random() - 0.5) * BOUNDS.z * 0.6,
+    );
+    group.rotation.set(
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+    );
+
+    scene.add(group);
+    shapes.push(group);
+    intentEngine.assign(group, 'car');
+    createLabel(group);
+    showCarMessage();
+
+    incrementTypeCount('car');
+
+    updateShapeCount();
+    updateRemoveButton();
+    updateAddButton();
+  }
+
+  function showCarMessage() {
+    const el = document.createElement('div');
+    el.className = 'cow-message';
+    el.textContent = 'A flying car zoomed in! 🚗';
+    document.body.appendChild(el);
+    // fade in
+    requestAnimationFrame(() => { el.style.opacity = '1'; });
+    // fade out and remove after a few seconds
+    setTimeout(() => {
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 400);
+    }, 3200);
+  }
+
   /* ── Remove a shape ─────────────────────────────────────────────────────── */
   function removeShape(mesh) {
     scene.remove(mesh);
@@ -1420,8 +1593,8 @@ const THEMES = {
   function recolorLiveShapes(theme) {
     shapes.forEach(obj => {
       if (obj.isGroup) {
-        // Cow/clown group — traverse children and re-derive color from the
-        // material's part tag (cowPart -> cowColors, clownPart -> clownColors).
+        // Cow/clown/baby/car group — traverse children and re-derive color
+        // from the material's part tag (cowPart -> cowColors, etc.).
         obj.traverse(child => {
           if (child.material && child.material.userData && child.material.userData.cowPart) {
             const part = child.material.userData.cowPart;
@@ -1434,6 +1607,10 @@ const THEMES = {
           } else if (child.material && child.material.userData && child.material.userData.babyPart) {
             const part = child.material.userData.babyPart;
             const hex = theme.babyColors[part];
+            if (hex !== undefined) child.material.color.setHex(hex);
+          } else if (child.material && child.material.userData && child.material.userData.carPart) {
+            const part = child.material.userData.carPart;
+            const hex = theme.carColors[part];
             if (hex !== undefined) child.material.color.setHex(hex);
           }
         });
