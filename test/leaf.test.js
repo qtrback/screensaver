@@ -25,8 +25,8 @@ function assertGreenDominant(hex, label) {
 }
 
 const leafStart = source.indexOf('function createLeaf(bounds, leafColors) {');
-const leafEnd = source.indexOf('/* ══════════════════════════════════════════════════════════════════════════════\n   SECTION 4', leafStart);
-assert(leafStart !== -1 && leafEnd !== -1, 'createLeaf factory exists before SECTION 4');
+const leafEnd = source.indexOf("\n\n/* ─────────────────────────────────────────────────────────────────────────────\n   createTree(bounds, treeColors)", leafStart);
+assert(leafStart !== -1 && leafEnd !== -1, 'createLeaf factory is bounded before createTree');
 const createLeafSource = source.slice(leafStart, leafEnd);
 
 assert(createLeafSource.includes('const group = new THREE.Group();'), 'createLeaf returns a THREE.Group peer');

@@ -62,13 +62,14 @@ const specialDispatches = [
   "if (available[0] === 'baby')  { spawnBaby();  spawnEmojiImage(); return; }",
   "if (available[0] === 'car')   { spawnCar();   spawnEmojiImage(); return; }",
   "if (available[0] === 'leaf')  { spawnLeaf();  spawnEmojiImage(); return; }",
+  "if (available[0] === 'tree')  { spawnTree();  spawnEmojiImage(); return; }",
 ];
 specialDispatches.forEach(snippet => assert(spawnShapeSource.includes(snippet), `paired emoji dispatch exists for ${snippet}`));
 assert(spawnShapeSource.includes('const { mesh, intent, geoName } = ShapeFactory.create(BOUNDS);'), 'normal spawn still creates a ShapeFactory 3D object');
 assertMatches(/ShapeFactory\.create\(BOUNDS\);[\s\S]*?scene\.add\(mesh\);[\s\S]*?shapes\.push\(mesh\);[\s\S]*?intentEngine\.assign\(mesh, intent\);[\s\S]*?spawnEmojiImage\(\);/, 'normal spawn also creates one emoji image after the 3D object');
-assert.strictEqual((spawnShapeSource.match(/spawnEmojiImage\(\)/g) || []).length, 6, 'spawnShape has exactly one emoji call for each special plus normal path');
+assert.strictEqual((spawnShapeSource.match(/spawnEmojiImage\(\)/g) || []).length, 7, 'spawnShape has exactly one emoji call for each special plus normal path');
 
-['function spawnCow() {', 'function spawnClown() {', 'function spawnBaby() {', 'function spawnCar() {', 'function spawnLeaf() {'].forEach((start, index, all) => {
+['function spawnCow() {', 'function spawnClown() {', 'function spawnBaby() {', 'function spawnCar() {', 'function spawnLeaf() {', 'function spawnTree() {'].forEach((start, index, all) => {
   const begin = source.indexOf(start);
   const end = index + 1 < all.length ? source.indexOf(all[index + 1], begin) : source.indexOf('/* ── Remove a shape', begin);
   assert(begin !== -1 && end !== -1, `${start} section exists`);
