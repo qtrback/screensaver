@@ -1049,6 +1049,49 @@ function createCar(bounds, carColors) {
 }
 
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   createLeaf(bounds, leafColors) — the green-leaf easter-egg, a first-class
+   peer of createCow/createClown/createBaby/createCar. Built from THREE
+   primitives only (Sphere/Cylinder) + MeshStandardMaterial, mirroring the
+   other specials. Each material is tagged with material.userData.leafPart so a
+   live theme switch can re-derive its color from the active theme's leafColors
+   palette.
+   ───────────────────────────────────────────────────────────────────────────── */
+function createLeaf(bounds, leafColors) {
+  const group = new THREE.Group();
+
+  // Leaf material palette — theme-aware. Falls back to green values if no
+  // theme palette is supplied, so the leaf is always green by default.
+  const lc = leafColors || {
+    blade: 0x2e8b2e, stem: 0x1f5c1f,
+  };
+
+  const bladeMat = new THREE.MeshStandardMaterial({ color: lc.blade, roughness: 0.55, metalness: 0.05 });
+  const stemMat  = new THREE.MeshStandardMaterial({ color: lc.stem,  roughness: 0.6,  metalness: 0.05 });
+
+  // Tag each material with its logical leaf-part name so a live theme
+  // switch can traverse the group and re-derive colors from leafColors.
+  bladeMat.userData.leafPart = 'blade';
+  stemMat.userData.leafPart  = 'stem';
+
+  /* Blade — flattened sphere angled like a drifting leaf */
+  const blade = new THREE.Mesh(new THREE.SphereGeometry(0.75, 24, 16), bladeMat);
+  blade.scale.set(0.85, 1.35, 0.12);
+  blade.rotation.z = -0.28;
+  group.add(blade);
+
+  /* Stem — thin cylinder running through the blade */
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 1.5, 10), stemMat);
+  stem.rotation.z = -0.28;
+  group.add(stem);
+
+  /* Scale the whole leaf down so it reads at the same size as the cow/clown/baby/car. */
+  group.scale.set(0.32, 0.32, 0.32);
+
+  return group;
+}
+
+
 /* ══════════════════════════════════════════════════════════════════════════════
    SECTION 4 — MAIN APPLICATION
    ─────────────────────────────────────────────────────────────────────────────
@@ -1107,6 +1150,8 @@ const THEMES = {
       wheel: 0x111111, hub: 0xd9d9d9, headlight: 0xffffaa,
       taillight: 0xff1744, flame: 0xff8c1a,
     },
+    // Leaf material colors — bright greens for the dark background.
+    leafColors: { blade: 0x3cb043, stem: 0x2e7d32 },
   },
   light: {
     clearColor: 0xf2f0ea,
@@ -1153,6 +1198,8 @@ const THEMES = {
       wheel: 0x111111, hub: 0x8a8478, headlight: 0xc9a227,
       taillight: 0xb01230, flame: 0xc26a12,
     },
+    // Deepened leaf materials for legibility against off-white.
+    leafColors: { blade: 0x2e7d32, stem: 0x1b5e20 },
   },
 };
 
@@ -1278,6 +1325,10 @@ const THEMES = {
     return shapes.some(s => s.userData && s.userData.geoName === 'car');
   }
 
+  function leafActive() {
+    return shapes.some(s => s.userData && s.userData.geoName === 'leaf');
+  }
+
   function updateShapeCount() {
     document.getElementById('shape-count').textContent = `Shapes: ${shapes.length}`;
   }
@@ -1327,6 +1378,7 @@ const THEMES = {
       if (!clownActive()) available.push('clown');
       if (!babyActive())  available.push('baby');
       if (!carActive())   available.push('car');
+      if (!leafActive())  available.push('leaf');
       // Shuffle: Fisher-Yates on the small list
       for (let i = available.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -1337,6 +1389,7 @@ const THEMES = {
         if (available[0] === 'clown') { spawnClown(); return; }
         if (available[0] === 'baby')  { spawnBaby();  return; }
         if (available[0] === 'car')   { spawnCar();   return; }
+        if (available[0] === 'leaf')  { spawnLeaf();  return; }
       }
       // All specials already live — fall through to a normal shape.
     }
@@ -1535,6 +1588,51 @@ const THEMES = {
     }, 3200);
   }
 
+  function spawnLeaf() {
+    if (shapes.length >= MAX_SHAPES || leafActive()) return;
+
+    const group = createLeaf(BOUNDS, THEMES[activeTheme].leafColors);
+    group.userData.intent  = 'leaf';
+    group.userData.geoName = 'leaf';
+
+    group.position.set(
+      (Math.random() - 0.5) * BOUNDS.x * 0.8,
+      (Math.random() - 0.5) * BOUNDS.y * 0.8,
+      (Math.random() - 0.5) * BOUNDS.z * 0.6,
+    );
+    group.rotation.set(
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+    );
+
+    scene.add(group);
+    shapes.push(group);
+    intentEngine.assign(group, 'leaf');
+    createLabel(group);
+    showLeafMessage();
+
+    incrementTypeCount('leaf');
+
+    updateShapeCount();
+    updateRemoveButton();
+    updateAddButton();
+  }
+
+  function showLeafMessage() {
+    const el = document.createElement('div');
+    el.className = 'cow-message';
+    el.textContent = 'You found a leaf drifting in space! 🍃';
+    document.body.appendChild(el);
+    // fade in
+    requestAnimationFrame(() => { el.style.opacity = '1'; });
+    // fade out and remove after a few seconds
+    setTimeout(() => {
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 400);
+    }, 3200);
+  }
+
   /* ── Remove a shape ─────────────────────────────────────────────────────── */
   function removeShape(mesh) {
     scene.remove(mesh);
@@ -1611,6 +1709,10 @@ const THEMES = {
           } else if (child.material && child.material.userData && child.material.userData.carPart) {
             const part = child.material.userData.carPart;
             const hex = theme.carColors[part];
+            if (hex !== undefined) child.material.color.setHex(hex);
+          } else if (child.material && child.material.userData && child.material.userData.leafPart) {
+            const part = child.material.userData.leafPart;
+            const hex = theme.leafColors[part];
             if (hex !== undefined) child.material.color.setHex(hex);
           }
         });
