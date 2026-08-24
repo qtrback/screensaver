@@ -361,7 +361,7 @@ class IntentEngine {
   constructor() {
     /**
      * Map<mesh, { intent: string, state: object }>
-     * state holds vel and nothing else — no behavior scratchpad needed.
+     * state holds velocity plus per-shape motion flags.
      */
     this._entries = new Map();
   }
@@ -381,6 +381,7 @@ class IntentEngine {
           y: (Math.random() - 0.5) * 1.0,
           z: (Math.random() - 0.5) * 1.0,
         },
+        frozen: false,
       },
     });
   }
@@ -400,6 +401,19 @@ class IntentEngine {
     return this._entries.get(mesh)?.state ?? null;
   }
 
+  /** Toggle whether a registered mesh skips its motion tick. */
+  toggleFrozen(mesh) {
+    const entry = this._entries.get(mesh);
+    if (!entry) return false;
+    entry.state.frozen = !entry.state.frozen;
+    return entry.state.frozen;
+  }
+
+  /** Read whether a registered mesh is frozen. */
+  isFrozen(mesh) {
+    return this._entries.get(mesh)?.state.frozen ?? false;
+  }
+
   /**
    * Tick all registered shapes — pure ballistic integration only.
    * @param {THREE.Object3D[]} _allShapes  — unused (kept for call-site compat)
@@ -410,6 +424,8 @@ class IntentEngine {
     const { integrate, bounce, enforceMinSpeed } = IntentRegistry;
 
     for (const [mesh, entry] of this._entries) {
+      if (entry.state.frozen) continue;
+
       // ── Pure ballistic motion: straight line + wall reflect + speed floor ──
       integrate(mesh.position, entry.state.vel, dt);
       bounce(mesh.position, entry.state.vel, bounds);
@@ -1783,7 +1799,7 @@ const THEMES = {
   document.addEventListener('touchstart', resetCursorTimer);
   resetCursorTimer();
 
-  /* -- Click-to-delete via raycasting -- */
+  /* -- Click-to-freeze via raycasting -- */
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
 
@@ -1797,14 +1813,14 @@ const THEMES = {
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObjects(shapes, true);
 
-    if (intersects.length > 0 && shapes.length > 1) {
+    if (intersects.length > 0) {
       // Find the root shape (could be a child of a group, e.g. the cow)
       let target = intersects[0].object;
       while (target.parent && !shapes.includes(target)) {
         target = target.parent;
       }
       if (shapes.includes(target)) {
-        removeShape(target);
+        intentEngine.toggleFrozen(target);
       }
     }
     // Empty-space click does nothing
@@ -1822,12 +1838,12 @@ const THEMES = {
     for (let i = 0; i < shapes.length; i++) {
       const a = shapes[i];
       const aState = intentEngine.getState(a);
-      if (!aState || !aState.vel) continue;
+      if (!aState || !aState.vel || aState.frozen) continue;
 
       for (let j = i + 1; j < shapes.length; j++) {
         const b = shapes[j];
         const bState = intentEngine.getState(b);
-        if (!bState || !bState.vel) continue;
+        if (!bState || !bState.vel || bState.frozen) continue;
 
         let nx = b.position.x - a.position.x;
         let ny = b.position.y - a.position.y;
