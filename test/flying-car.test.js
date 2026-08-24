@@ -65,10 +65,10 @@ assert(removeShapeStart !== -1 && removeShapeEnd !== -1, 'removeShape section ex
 const removeShapeSource = source.slice(removeShapeStart, removeShapeEnd);
 assert(!/geoName === 'car'/.test(removeShapeSource), 'removeShape has no car-specific branch');
 
-const raycastStart = source.indexOf('/* -- Click-to-delete via raycasting -- */');
-assert(raycastStart !== -1, 'raycast-delete section exists');
+const raycastStart = source.indexOf('/* -- Click-to-freeze via raycasting -- */');
+assert(raycastStart !== -1, 'raycast-freeze section exists');
 const raycastSource = source.slice(raycastStart);
-assert(!/geoName === 'car'/.test(raycastSource), 'raycast-delete has no car-specific branch');
+assert(!/geoName === 'car'/.test(raycastSource), 'raycast-freeze has no car-specific branch');
 
 const intentEngineStart = source.indexOf('class IntentEngine {');
 const intentEngineEnd = source.indexOf('/* ══════════════════════════════════════════════════════════════════════════════\n   SECTION 3', intentEngineStart);
