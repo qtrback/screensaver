@@ -1,0 +1,9 @@
+{
+  "name": "screensaver",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Static single-file three.js screensaver app",
+  "scripts": {
+    "test": "node test/freeze.test.js && node test/flying-car.test.js && node test/leaf.test.js"
+  }
+}
