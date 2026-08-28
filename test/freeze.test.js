@@ -22,14 +22,41 @@ assertMatches(/toggleFrozen\(mesh\) \{[\s\S]*?const entry = this\._entries\.get\
 assertMatches(/for \(const \[mesh, entry\] of this\._entries\) \{\s*if \(entry\.state\.frozen\) continue;[\s\S]*?integrate\(mesh\.position, entry\.state\.vel, dt\);[\s\S]*?bounce\(mesh\.position, entry\.state\.vel, bounds\);[\s\S]*?enforceMinSpeed\(entry\.state\.vel\);[\s\S]*?mesh\.rotation\.x \+=/, 'update skips frozen entries before motion and spin');
 assert(!/state\.vel\s*=/.test(intentEngineSource), 'IntentEngine never replaces or re-randomizes velocity after assignment');
 
-const clickStart = source.indexOf('/* -- Click-to-freeze via raycasting -- */');
+const clickStart = source.indexOf('/* -- Click gestures via raycasting -- */');
 const collisionStart = source.indexOf('function resolveCollisions()', clickStart);
-assert(clickStart !== -1 && collisionStart !== -1, 'click-to-freeze raycast section exists');
+assert(clickStart !== -1 && collisionStart !== -1, 'click gestures raycast section exists');
 const clickSource = source.slice(clickStart, collisionStart);
-assertContains('/* -- Click-to-freeze via raycasting -- */', 'raycast comment reflects freeze behavior');
-assertMatches(/if \(intersects\.length > 0\) \{[\s\S]*?let target = intersects\[0\]\.object;[\s\S]*?while \(target\.parent && !shapes\.includes\(target\)\) \{[\s\S]*?target = target\.parent;[\s\S]*?if \(shapes\.includes\(target\)\) \{[\s\S]*?intentEngine\.toggleFrozen\(target\);[\s\S]*?\}/, 'click handler keeps root-shape resolution and toggles frozen state');
-assert(!clickSource.includes('removeShape('), 'plain raycast click does not delete shapes');
-assert(!clickSource.includes('shapes.length > 1'), 'plain raycast click is not blocked when only one shape remains');
+assertContains('/* -- Click gestures via raycasting -- */', 'raycast comment reflects both click gestures');
+assertMatches(/if \(intersects\.length > 0\) \{[\s\S]*?let target = intersects\[0\]\.object;[\s\S]*?while \(target\.parent && !shapes\.includes\(target\)\) \{[\s\S]*?target = target\.parent;[\s\S]*?if \(shapes\.includes\(target\)\) \{[\s\S]*?if \(event\.shiftKey\) \{[\s\S]*?spawnBurst\([\s\S]*?removeShape\(target\);[\s\S]*?\} else \{[\s\S]*?intentEngine\.toggleFrozen\(target\);[\s\S]*?\}[\s\S]*?\}/, 'click handler keeps root-shape resolution and branches on shiftKey between delete and freeze');
+assertContains('event.shiftKey', 'click handler branches on the shift modifier');
+assert(clickSource.includes('removeShape(target)'), 'shift+click path deletes the target shape');
+assert(clickSource.includes('intentEngine.toggleFrozen(target)'), 'plain click path still toggles frozen state');
+assert(clickSource.includes('spawnBurst('), 'shift+click delete path triggers a burst effect');
+assert(!clickSource.includes('shapes.length > 1'), 'shift+click delete is not blocked when only one shape remains');
+assert(!clickSource.includes('shapes.length <= 1'), 'shift+click delete has no keep-one floor');
+
+// Mutual exclusivity: the shift branch and the plain branch must not both
+// invoke the same action — removeShape must not appear in the same branch
+// as toggleFrozen (they are separated by an if/else, checked structurally
+// above); here we additionally confirm the shift branch precedes removeShape
+// and toggleFrozen appears only in the else arm.
+const shiftBranchIdx = clickSource.indexOf('if (event.shiftKey)');
+const removeShapeIdx = clickSource.indexOf('removeShape(target)');
+const toggleFrozenIdx = clickSource.indexOf('intentEngine.toggleFrozen(target)');
+const elseIdx = clickSource.indexOf('} else {', shiftBranchIdx);
+assert(shiftBranchIdx !== -1 && removeShapeIdx > shiftBranchIdx && removeShapeIdx < elseIdx, 'removeShape is called within the shift branch, not the else branch');
+assert(elseIdx !== -1 && toggleFrozenIdx > elseIdx, 'toggleFrozen is called within the else (plain click) branch, not the shift branch');
+
+// Burst helper: real spawnBurst function exists and is wired into the scene.
+const spawnBurstStart = source.indexOf('function spawnBurst(');
+const clickHandlerStart = source.indexOf("renderer.domElement.addEventListener('click'", clickStart);
+assert(spawnBurstStart !== -1 && spawnBurstStart > clickStart && spawnBurstStart < clickHandlerStart, 'spawnBurst helper is defined in the raycast section, before the click handler');
+const spawnBurstEnd = clickHandlerStart;
+const spawnBurstSource = source.slice(spawnBurstStart, spawnBurstEnd);
+assert(spawnBurstSource.includes('scene.add('), 'spawnBurst adds its particle effect to the scene');
+assert(spawnBurstSource.includes('scene.remove('), 'spawnBurst removes its particle effect from the scene when finished');
+assert(spawnBurstSource.includes('.dispose()'), 'spawnBurst disposes geometry/material to avoid leaks');
+assert(/requestAnimationFrame/.test(spawnBurstSource), 'spawnBurst drives its own animation frame loop');
 
 const removeShapeStart = source.indexOf('function removeShape(mesh) {');
 const removeShapeEnd = source.indexOf('function updateRemoveButton()', removeShapeStart);

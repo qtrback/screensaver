@@ -1799,9 +1799,83 @@ const THEMES = {
   document.addEventListener('touchstart', resetCursorTimer);
   resetCursorTimer();
 
-  /* -- Click-to-freeze via raycasting -- */
+  /* -- Click gestures via raycasting -- */
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
+
+  // Spawn a short-lived particle burst at `position` (a THREE.Vector3) using
+  // THREE.Points, animated outward + faded via its own requestAnimationFrame
+  // loop so it plays out independently of the main animate() loop's state.
+  // The main animate() loop keeps calling renderer.render(scene, camera)
+  // every frame regardless, which is what actually draws the burst; this
+  // loop only advances the particle positions/opacity and disposes cleanly
+  // when the burst finishes.
+  function spawnBurst(position) {
+    const PARTICLE_COUNT = 60;
+    const DURATION = 0.8; // seconds
+
+    const positions = new Float32Array(PARTICLE_COUNT * 3);
+    const velocities = new Float32Array(PARTICLE_COUNT * 3);
+
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      positions[i * 3]     = position.x;
+      positions[i * 3 + 1] = position.y;
+      positions[i * 3 + 2] = position.z;
+
+      // Random outward direction on a sphere, random speed.
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(Math.random() * 2 - 1);
+      const speed = 1.2 + Math.random() * 2.4;
+      velocities[i * 3]     = Math.sin(phi) * Math.cos(theta) * speed;
+      velocities[i * 3 + 1] = Math.sin(phi) * Math.sin(theta) * speed;
+      velocities[i * 3 + 2] = Math.cos(phi) * speed;
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+    const material = new THREE.PointsMaterial({
+      color: 0xffd23f, // bright spark color, reads on both themes
+      size: 0.09,
+      transparent: true,
+      opacity: 1,
+      depthWrite: false,
+    });
+
+    const points = new THREE.Points(geometry, material);
+    scene.add(points);
+
+    let elapsed = 0;
+    let lastTime = performance.now();
+
+    function tick(now) {
+      const dt = Math.min((now - lastTime) / 1000, 0.1);
+      lastTime = now;
+      elapsed += dt;
+
+      const posAttr = geometry.attributes.position;
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        posAttr.array[i * 3]     += velocities[i * 3]     * dt;
+        posAttr.array[i * 3 + 1] += velocities[i * 3 + 1] * dt;
+        posAttr.array[i * 3 + 2] += velocities[i * 3 + 2] * dt;
+      }
+      posAttr.needsUpdate = true;
+
+      const t = elapsed / DURATION;
+      material.opacity = Math.max(0, 1 - t);
+      material.size = Math.max(0.01, 0.09 * (1 - t * 0.7));
+
+      if (elapsed < DURATION) {
+        requestAnimationFrame(tick);
+      } else {
+        scene.remove(points);
+        geometry.dispose();
+        material.dispose();
+      }
+    }
+
+    requestAnimationFrame(tick);
+  }
 
   renderer.domElement.addEventListener('click', (event) => {
     // Don't raycast if click was on UI
@@ -1820,7 +1894,16 @@ const THEMES = {
         target = target.parent;
       }
       if (shapes.includes(target)) {
-        intentEngine.toggleFrozen(target);
+        if (event.shiftKey) {
+          // Shift+click: explode-delete. Capture world position before the
+          // shape is removed, burst there, then delete. No keep-one floor.
+          const burstPosition = target.getWorldPosition(new THREE.Vector3());
+          spawnBurst(burstPosition);
+          removeShape(target);
+        } else {
+          // Plain click: freeze toggle, unchanged.
+          intentEngine.toggleFrozen(target);
+        }
       }
     }
     // Empty-space click does nothing
