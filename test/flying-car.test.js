@@ -56,7 +56,7 @@ assertMatches(/function showCarMessage\(\) \{[\s\S]*?el\.className = 'cow-messag
 assertMatches(/child\.material\.userData\.carPart[\s\S]*?const part = child\.material\.userData\.carPart;[\s\S]*?const hex = theme\.carColors\[part\];[\s\S]*?child\.material\.color\.setHex\(hex\);/, 'recolorLiveShapes has a carPart branch');
 
 assertContains("if (!carActive())   available.push('car');", 'spawnShape only offers car when no car is active');
-assertContains("if (available[0] === 'car')   { spawnCar();   return; }", 'spawnShape dispatches car through the shuffled available list');
+assertContains("if (available[0] === 'car')   { spawnCar();   spawnEmojiImage(); return; }", 'spawnShape dispatches car through the shuffled available list');
 assertContains('const COW_CHANCE = 0.12;', 'COW_CHANCE remains unchanged');
 
 const removeShapeStart = source.indexOf('function removeShape(mesh) {');
