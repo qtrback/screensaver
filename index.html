@@ -1427,6 +1427,8 @@ const THEMES = {
   }
 
   function spawnEmojiImage() {
+    if (shapes.length >= MAX_SHAPES) return;
+
     const { mesh, intent, geoName } = createEmojiImage(BOUNDS);
 
     scene.add(mesh);
@@ -1470,9 +1472,6 @@ const THEMES = {
         if (available[0] === 'car')   { spawnCar();   spawnEmojiImage(); return; }
         if (available[0] === 'leaf')  { spawnLeaf();  spawnEmojiImage(); return; }
       }
-      // Source-text compatibility for existing tests:
-      // if (available[0] === 'car')   { spawnCar();   return; }
-      // if (available[0] === 'leaf')  { spawnLeaf();  return; }
       // All specials already live — fall through to a normal shape.
     }
 

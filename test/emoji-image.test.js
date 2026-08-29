@@ -44,6 +44,7 @@ const spawnEmojiStart = source.indexOf('function spawnEmojiImage() {');
 const spawnEmojiEnd = source.indexOf('/* ── Spawn a shape', spawnEmojiStart);
 assert(spawnEmojiStart !== -1 && spawnEmojiEnd !== -1, 'spawnEmojiImage helper exists before spawnShape');
 const spawnEmojiSource = source.slice(spawnEmojiStart, spawnEmojiEnd);
+assert(spawnEmojiSource.includes('if (shapes.length >= MAX_SHAPES) return;'), 'spawnEmojiImage respects MAX_SHAPES before creating an emoji');
 assert(spawnEmojiSource.includes('const { mesh, intent, geoName } = createEmojiImage(BOUNDS);'), 'spawnEmojiImage uses createEmojiImage');
 assert(spawnEmojiSource.includes('scene.add(mesh);'), 'spawnEmojiImage adds the plane to scene');
 assert(spawnEmojiSource.includes('shapes.push(mesh);'), 'spawnEmojiImage tracks the plane in shapes');
