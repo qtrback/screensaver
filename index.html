@@ -426,10 +426,22 @@ class IntentEngine {
     for (const [mesh, entry] of this._entries) {
       if (entry.state.frozen) continue;
 
-      // ── Pure ballistic motion: straight line + wall reflect + speed floor ──
-      integrate(mesh.position, entry.state.vel, dt);
-      bounce(mesh.position, entry.state.vel, bounds);
-      enforceMinSpeed(entry.state.vel);
+      if (mesh.userData.emojiGlyph === '⭐') {
+        // ── Star: driven circular orbit centered on origin, confined to the middle third ──
+        // R + plane half-diagonal (1.05*√2/2 ≈ 0.742) ≤ middle-third half-extent of the tightest axis (y: 5/3 ≈ 1.667)
+        const ORBIT_RADIUS = 0.9;
+        const ORBIT_SPEED  = 0.8; // radians/sec
+        if (entry.state.orbitAngle === undefined) entry.state.orbitAngle = 0;
+        entry.state.orbitAngle += dt * ORBIT_SPEED;
+        mesh.position.x = ORBIT_RADIUS * Math.cos(entry.state.orbitAngle);
+        mesh.position.y = ORBIT_RADIUS * Math.sin(entry.state.orbitAngle);
+        mesh.position.z = 0;
+      } else {
+        // ── Pure ballistic motion: straight line + wall reflect + speed floor ──
+        integrate(mesh.position, entry.state.vel, dt);
+        bounce(mesh.position, entry.state.vel, bounds);
+        enforceMinSpeed(entry.state.vel);
+      }
 
       // ── Decorative spin — uniform across all shapes ──────────────────────
       const rotSpeed = 0.5;

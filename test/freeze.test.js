@@ -105,8 +105,8 @@ vm.createContext(context);
 vm.runInContext(classSource, context);
 
 const engine = new context.IntentEngine();
-const frozenMesh = { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 } };
-const movingMesh = { position: { x: 10, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 } };
+const frozenMesh = { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, userData: {} };
+const movingMesh = { position: { x: 10, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, userData: {} };
 engine.assign(frozenMesh, 'frozen');
 engine.assign(movingMesh, 'moving');
 const frozenState = engine.getState(frozenMesh);
