@@ -1944,9 +1944,9 @@ const THEMES = {
     requestAnimationFrame(tick);
   }
 
-  renderer.domElement.addEventListener('click', (event) => {
+  function pickShape(event) {
     // Don't raycast if click was on UI
-    if (event.target !== renderer.domElement) return;
+    if (event.target !== renderer.domElement) return null;
 
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -1961,19 +1961,30 @@ const THEMES = {
         target = target.parent;
       }
       if (shapes.includes(target)) {
-        if (event.shiftKey) {
-          // Shift+click: explode-delete. Capture world position before the
-          // shape is removed, burst there, then delete. No keep-one floor.
-          const burstPosition = target.getWorldPosition(new THREE.Vector3());
-          spawnBurst(burstPosition);
-          removeShape(target);
-        } else {
-          // Plain click: freeze toggle, unchanged.
-          intentEngine.toggleFrozen(target);
-        }
+        return target;
       }
     }
     // Empty-space click does nothing
+    return null;
+  }
+
+  renderer.domElement.addEventListener('dblclick', (event) => {
+    const target = pickShape(event);
+    if (target) {
+      // Double-click: explode-delete. Capture world position before the
+      // shape is removed, burst there, then delete. No keep-one floor.
+      const burstPosition = target.getWorldPosition(new THREE.Vector3());
+      spawnBurst(burstPosition);
+      removeShape(target);
+    }
+  });
+
+  renderer.domElement.addEventListener('click', (event) => {
+    const target = pickShape(event);
+    if (target) {
+      // Plain click: freeze toggle.
+      intentEngine.toggleFrozen(target);
+    }
   });
 
   function resolveCollisions() {

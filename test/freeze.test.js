@@ -27,25 +27,34 @@ const collisionStart = source.indexOf('function resolveCollisions()', clickStart
 assert(clickStart !== -1 && collisionStart !== -1, 'click gestures raycast section exists');
 const clickSource = source.slice(clickStart, collisionStart);
 assertContains('/* -- Click gestures via raycasting -- */', 'raycast comment reflects both click gestures');
-assertMatches(/if \(intersects\.length > 0\) \{[\s\S]*?let target = intersects\[0\]\.object;[\s\S]*?while \(target\.parent && !shapes\.includes\(target\)\) \{[\s\S]*?target = target\.parent;[\s\S]*?if \(shapes\.includes\(target\)\) \{[\s\S]*?if \(event\.shiftKey\) \{[\s\S]*?spawnBurst\([\s\S]*?removeShape\(target\);[\s\S]*?\} else \{[\s\S]*?intentEngine\.toggleFrozen\(target\);[\s\S]*?\}[\s\S]*?\}/, 'click handler keeps root-shape resolution and branches on shiftKey between delete and freeze');
-assertContains('event.shiftKey', 'click handler branches on the shift modifier');
-assert(clickSource.includes('removeShape(target)'), 'shift+click path deletes the target shape');
-assert(clickSource.includes('intentEngine.toggleFrozen(target)'), 'plain click path still toggles frozen state');
-assert(clickSource.includes('spawnBurst('), 'shift+click delete path triggers a burst effect');
-assert(!clickSource.includes('shapes.length > 1'), 'shift+click delete is not blocked when only one shape remains');
-assert(!clickSource.includes('shapes.length <= 1'), 'shift+click delete has no keep-one floor');
+assert(!source.includes('event.shiftKey'), 'shape interactions do not branch on the shift modifier');
 
-// Mutual exclusivity: the shift branch and the plain branch must not both
-// invoke the same action — removeShape must not appear in the same branch
-// as toggleFrozen (they are separated by an if/else, checked structurally
-// above); here we additionally confirm the shift branch precedes removeShape
-// and toggleFrozen appears only in the else arm.
-const shiftBranchIdx = clickSource.indexOf('if (event.shiftKey)');
-const removeShapeIdx = clickSource.indexOf('removeShape(target)');
-const toggleFrozenIdx = clickSource.indexOf('intentEngine.toggleFrozen(target)');
-const elseIdx = clickSource.indexOf('} else {', shiftBranchIdx);
-assert(shiftBranchIdx !== -1 && removeShapeIdx > shiftBranchIdx && removeShapeIdx < elseIdx, 'removeShape is called within the shift branch, not the else branch');
-assert(elseIdx !== -1 && toggleFrozenIdx > elseIdx, 'toggleFrozen is called within the else (plain click) branch, not the shift branch');
+const pickShapeStart = clickSource.indexOf('function pickShape(event) {');
+const dblclickHandlerStart = clickSource.indexOf("renderer.domElement.addEventListener('dblclick'");
+const singleClickHandlerStart = clickSource.indexOf("renderer.domElement.addEventListener('click'");
+assert(pickShapeStart !== -1 && dblclickHandlerStart !== -1 && singleClickHandlerStart !== -1, 'pickShape plus dblclick and click handlers exist');
+assert(pickShapeStart < dblclickHandlerStart && dblclickHandlerStart < singleClickHandlerStart, 'shape picking is shared before separate gesture handlers');
+const pickShapeSource = clickSource.slice(pickShapeStart, dblclickHandlerStart);
+const dblclickSource = clickSource.slice(dblclickHandlerStart, singleClickHandlerStart);
+const singleClickSource = clickSource.slice(singleClickHandlerStart);
+
+assert(pickShapeSource.includes('if (event.target !== renderer.domElement) return null;'), 'shared pickShape guard ignores non-canvas events');
+assert(pickShapeSource.includes('raycaster.intersectObjects(shapes, true)'), 'shared pickShape raycasts against all shape descendants');
+assertMatches(/function pickShape\(event\) \{[\s\S]*?if \(intersects\.length > 0\) \{[\s\S]*?let target = intersects\[0\]\.object;[\s\S]*?while \(target\.parent && !shapes\.includes\(target\)\) \{[\s\S]*?target = target\.parent;[\s\S]*?if \(shapes\.includes\(target\)\) \{[\s\S]*?return target;[\s\S]*?return null;[\s\S]*?\}/, 'pickShape preserves root-shape resolution before returning a shape or null');
+
+assert(dblclickSource.includes("renderer.domElement.addEventListener('dblclick'"), 'dblclick listener is wired to renderer.domElement');
+assert(dblclickSource.includes('const target = pickShape(event);'), 'dblclick handler resolves the target shape via pickShape');
+assert(dblclickSource.includes('const burstPosition = target.getWorldPosition(new THREE.Vector3());'), 'dblclick path captures the target world position before removal');
+assert(dblclickSource.includes('spawnBurst(burstPosition);'), 'dblclick path triggers a burst effect');
+assert(dblclickSource.includes('removeShape(target);'), 'dblclick path deletes the target shape');
+assert(!dblclickSource.includes('shapes.length > 1'), 'dblclick delete is not blocked when only one shape remains');
+assert(!dblclickSource.includes('shapes.length <= 1'), 'dblclick delete has no keep-one floor');
+
+assert(singleClickSource.includes("renderer.domElement.addEventListener('click'"), 'click listener is wired to renderer.domElement');
+assert(singleClickSource.includes('const target = pickShape(event);'), 'click handler resolves the target shape via pickShape');
+assert(singleClickSource.includes('intentEngine.toggleFrozen(target);'), 'single-click path toggles frozen state');
+assert(!singleClickSource.includes('spawnBurst('), 'single-click path does not trigger a burst effect');
+assert(!singleClickSource.includes('removeShape(target)'), 'single-click path does not delete the target shape');
 
 // Burst helper: real spawnBurst function exists and is wired into the scene.
 const spawnBurstStart = source.indexOf('function spawnBurst(');
