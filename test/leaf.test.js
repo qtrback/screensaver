@@ -80,7 +80,7 @@ assertMatches(/function showLeafMessage\(\) \{[\s\S]*?el\.className = 'cow-messa
 assertMatches(/child\.material\.userData\.leafPart[\s\S]*?const part = child\.material\.userData\.leafPart;[\s\S]*?const hex = theme\.leafColors\[part\];[\s\S]*?child\.material\.color\.setHex\(hex\);/, 'recolorLiveShapes has a leafPart branch');
 
 assertContains("if (!leafActive())  available.push('leaf');", 'spawnShape only offers leaf when no leaf is active');
-assertContains("if (available[0] === 'leaf')  { spawnLeaf();  spawnEmojiImage(); return; }", 'spawnShape dispatches leaf through the shuffled available list');
+assertContains("if (available[0] === 'leaf')  { spawnLeaf();  return; }", 'spawnShape dispatches leaf through the shuffled available list');
 
 const shapeFactoryStart = source.indexOf('const ShapeFactory = (() => {');
 const shapeFactoryEnd = source.indexOf('function createCow(bounds, cowColors) {', shapeFactoryStart);
