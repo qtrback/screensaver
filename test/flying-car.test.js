@@ -47,7 +47,6 @@ assertContains('const group = createCar(BOUNDS, THEMES[activeTheme].carColors);'
 assertContains("group.userData.intent  = 'car';", 'spawnCar tags intent as car');
 assertContains("group.userData.geoName = 'car';", 'spawnCar tags geoName as car');
 assertContains("intentEngine.assign(group, 'car');", 'spawnCar registers the car with the generic intent engine');
-assertContains("incrementTypeCount('car');", 'spawnCar increments the cumulative car type count');
 assertContains('showCarMessage();', 'spawnCar shows the car announcement');
 
 assertContains('function showCarMessage() {', 'showCarMessage exists');

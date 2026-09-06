@@ -44,7 +44,6 @@ assertContains('const group = createTree(BOUNDS, THEMES[activeTheme].treeColors)
 assertContains("group.userData.intent  = 'tree';", 'spawnTree tags intent as tree');
 assertContains("group.userData.geoName = 'tree';", 'spawnTree tags geoName as tree');
 assertContains("intentEngine.assign(group, 'tree');", 'spawnTree registers the tree with the generic intent engine');
-assertContains("incrementTypeCount('tree');", 'spawnTree increments the cumulative tree type count');
 assertContains('showTreeMessage();', 'spawnTree shows the tree announcement');
 
 assertContains('function showTreeMessage() {', 'showTreeMessage exists');

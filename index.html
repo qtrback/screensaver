@@ -53,37 +53,6 @@
       letter-spacing: 0.04em;
     }
 
-    #shape-count {
-      font-size: 13px;
-      font-weight: 500;
-      color: rgba(255, 255, 255, 0.85);
-    }
-
-    /* ── Cumulative Type Counts panel (top-left, session-only) ───────────── */
-    #type-counts {
-      position: fixed;
-      top: 24px;
-      left: 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      z-index: 100;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(12px);
-      border-radius: 12px;
-      padding: 8px 14px;
-    }
-
-    #type-counts:empty { display: none; }
-
-    .type-count-row {
-      font-size: 12px;
-      font-weight: 500;
-      letter-spacing: 0.04em;
-      color: rgba(255, 255, 255, 0.85);
-    }
-
     /* Add-shape button */
     #btn-add {
       width: 48px;
@@ -208,19 +177,6 @@
       color: rgba(20, 18, 14, 0.75);
     }
 
-    body.theme-light #shape-count {
-      color: rgba(20, 18, 14, 0.9);
-    }
-
-    body.theme-light #type-counts {
-      background: rgba(20, 18, 14, 0.06);
-      border: 1px solid rgba(20, 18, 14, 0.18);
-    }
-
-    body.theme-light .type-count-row {
-      color: rgba(20, 18, 14, 0.9);
-    }
-
     body.theme-light #btn-add,
     body.theme-light #btn-remove {
       border: 1.5px solid rgba(20, 18, 14, 0.3);
@@ -267,12 +223,8 @@
 
 <div id="canvas-container"></div>
 
-<!-- Cumulative per-type appearance counts (session-only, top-left) -->
-<div id="type-counts"></div>
-
 <!-- UI controls -->
 <div id="ui">
-  <div class="ui-badge" id="shape-count">Shapes: 1</div>
   <button id="btn-theme">light mode</button>
   <button id="btn-labels">labels on</button>
   <button id="btn-remove" title="Remove shape">&#x2212;</button>
@@ -348,7 +300,6 @@ const IntentRegistry = (() => {
   /* ── Public API ─────────────────────────────────────────────────────────── */
   return { integrate, bounce, enforceMinSpeed };
 })();
-
 
 /* ══════════════════════════════════════════════════════════════════════════════
    SECTION 2 — INTENT ENGINE
@@ -439,7 +390,6 @@ class IntentEngine {
     }
   }
 }
-
 
 /* ══════════════════════════════════════════════════════════════════════════════
    SECTION 3 — SHAPE FACTORY
@@ -553,7 +503,6 @@ const ShapeFactory = (() => {
     },
   };
 })();
-
 
 /* COW FACTORY -- createCow(bounds)
    Builds a small, cartoonish "flying cow" easter-egg mesh out of Three.js
@@ -707,7 +656,6 @@ function createCow(bounds, cowColors) {
   return group;
 }
 
-
 /* ─────────────────────────────────────────────────────────────────────
    createClown(bounds, clownColors) — the clown easter-egg, a first-class
    peer of the cow. Built from THREE primitives only (Cone/Sphere/Cylinder/
@@ -833,7 +781,6 @@ function createClown(bounds, clownColors) {
   return group;
 }
 
-
 /* ─────────────────────────────────────────────────────────────────────────────
    createBaby(bounds, babyColors) — the baby easter-egg, a first-class peer
    of createCow and createClown. Built from THREE primitives only (Sphere/
@@ -954,7 +901,6 @@ function createBaby(bounds, babyColors) {
   return group;
 }
 
-
 /* ─────────────────────────────────────────────────────────────────────────────
    createCar(bounds, carColors) — the flying-car easter-egg, a first-class
    peer of createCow/createClown/createBaby. Built from THREE primitives only
@@ -1064,7 +1010,6 @@ function createCar(bounds, carColors) {
   return group;
 }
 
-
 /* ─────────────────────────────────────────────────────────────────────────────
    createLeaf(bounds, leafColors) — the green-leaf easter-egg, a first-class
    peer of createCow/createClown/createBaby/createCar. Built from THREE
@@ -1106,7 +1051,6 @@ function createLeaf(bounds, leafColors) {
 
   return group;
 }
-
 
 /* ─────────────────────────────────────────────────────────────────────────────
    createTree(bounds, treeColors) — the tree easter-egg, a first-class peer of
@@ -1168,7 +1112,6 @@ function createTree(bounds, treeColors) {
 
   return group;
 }
-
 
 /* ══════════════════════════════════════════════════════════════════════════════
    SECTION 4 — MAIN APPLICATION
@@ -1290,7 +1233,6 @@ const THEMES = {
     },
   },
 };
-
 
 (function main() {
   /* ── Scene ──────────────────────────────────────────────────────────────── */
@@ -1421,35 +1363,6 @@ const THEMES = {
     return shapes.some(s => s.userData && s.userData.geoName === 'tree');
   }
 
-  function updateShapeCount() {
-    document.getElementById('shape-count').textContent = `Shapes: ${shapes.length}`;
-  }
-
-  /* ── Cumulative per-type appearance counter ──────────────────────────
-     Session-only, in-memory tally of how many times each object type has
-     SPAWNED (never decremented on removal). Keyed by the same geoName
-     string used by ShapeFactory.create() / spawnCow(). Not persisted to
-     any web storage — resets on reload. */
-  const typeCounts = {};
-
-  function incrementTypeCount(geoName) {
-    typeCounts[geoName] = (typeCounts[geoName] || 0) + 1;
-    updateTypeCounts();
-  }
-
-  function updateTypeCounts() {
-    const el = document.getElementById('type-counts');
-    el.innerHTML = '';
-    Object.keys(typeCounts).forEach(geoName => {
-      const count = typeCounts[geoName];
-      if (!count || count <= 0) return; // only show types that have appeared
-      const row = document.createElement('div');
-      row.className = 'type-count-row';
-      row.textContent = `${geoName}: ${count}`;
-      el.appendChild(row);
-    });
-  }
-
   function updateAddButton() {
     document.getElementById('btn-add').disabled = shapes.length >= MAX_SHAPES;
   }
@@ -1495,9 +1408,6 @@ const THEMES = {
     intentEngine.assign(mesh, intent);
     createLabel(mesh);
 
-    incrementTypeCount(geoName);
-
-    updateShapeCount();
     updateRemoveButton();
     updateAddButton();
   }
@@ -1526,9 +1436,6 @@ const THEMES = {
     createLabel(group);
     showCowMessage();
 
-    incrementTypeCount('cow');
-
-    updateShapeCount();
     updateRemoveButton();
     updateAddButton();
   }
@@ -1571,9 +1478,6 @@ const THEMES = {
     createLabel(group);
     showClownMessage();
 
-    incrementTypeCount('clown');
-
-    updateShapeCount();
     updateRemoveButton();
     updateAddButton();
   }
@@ -1616,9 +1520,6 @@ const THEMES = {
     createLabel(group);
     showBabyMessage();
 
-    incrementTypeCount('baby');
-
-    updateShapeCount();
     updateRemoveButton();
     updateAddButton();
   }
@@ -1661,9 +1562,6 @@ const THEMES = {
     createLabel(group);
     showCarMessage();
 
-    incrementTypeCount('car');
-
-    updateShapeCount();
     updateRemoveButton();
     updateAddButton();
   }
@@ -1706,9 +1604,6 @@ const THEMES = {
     createLabel(group);
     showLeafMessage();
 
-    incrementTypeCount('leaf');
-
-    updateShapeCount();
     updateRemoveButton();
     updateAddButton();
   }
@@ -1737,9 +1632,6 @@ const THEMES = {
     createLabel(group);
     showTreeMessage();
 
-    incrementTypeCount('tree');
-
-    updateShapeCount();
     updateRemoveButton();
     updateAddButton();
   }
@@ -1789,7 +1681,6 @@ const THEMES = {
       mesh.geometry.dispose();
       mesh.material.dispose();
     }
-    updateShapeCount();
     updateRemoveButton();
     updateAddButton();
   }

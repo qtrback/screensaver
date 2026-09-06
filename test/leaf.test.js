@@ -71,7 +71,6 @@ assertContains("group.userData.geoName = 'leaf';", 'spawnLeaf tags geoName as le
 assertContains('scene.add(group);', 'spawnLeaf adds the leaf group to the scene');
 assertContains('shapes.push(group);', 'spawnLeaf tracks the leaf in shapes');
 assertContains("intentEngine.assign(group, 'leaf');", 'spawnLeaf registers the leaf with the generic intent engine');
-assertContains("incrementTypeCount('leaf');", 'spawnLeaf increments the cumulative leaf type count');
 assertContains('showLeafMessage();', 'spawnLeaf shows the leaf announcement');
 
 assertContains('function showLeafMessage() {', 'showLeafMessage exists');
