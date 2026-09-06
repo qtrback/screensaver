@@ -426,22 +426,10 @@ class IntentEngine {
     for (const [mesh, entry] of this._entries) {
       if (entry.state.frozen) continue;
 
-      if (mesh.userData.emojiGlyph === '⭐') {
-        // ── Star: driven circular orbit centered on origin, confined to the middle third ──
-        // R + plane half-diagonal (1.05*√2/2 ≈ 0.742) ≤ middle-third half-extent of the tightest axis (y: 5/3 ≈ 1.667)
-        const ORBIT_RADIUS = 0.9;
-        const ORBIT_SPEED  = 0.8; // radians/sec
-        if (entry.state.orbitAngle === undefined) entry.state.orbitAngle = 0;
-        entry.state.orbitAngle += dt * ORBIT_SPEED;
-        mesh.position.x = ORBIT_RADIUS * Math.cos(entry.state.orbitAngle);
-        mesh.position.y = ORBIT_RADIUS * Math.sin(entry.state.orbitAngle);
-        mesh.position.z = 0;
-      } else {
-        // ── Pure ballistic motion: straight line + wall reflect + speed floor ──
-        integrate(mesh.position, entry.state.vel, dt);
-        bounce(mesh.position, entry.state.vel, bounds);
-        enforceMinSpeed(entry.state.vel);
-      }
+      // ── Pure ballistic motion: straight line + wall reflect + speed floor ──
+      integrate(mesh.position, entry.state.vel, dt);
+      bounce(mesh.position, entry.state.vel, bounds);
+      enforceMinSpeed(entry.state.vel);
 
       // ── Decorative spin — uniform across all shapes ──────────────────────
       const rotSpeed = 0.5;
@@ -565,54 +553,6 @@ const ShapeFactory = (() => {
     },
   };
 })();
-
-
-/* EMOJI IMAGE FACTORY -- createEmojiImage(bounds)
-   Builds a flat 2D emoji image as a CanvasTexture on a PlaneGeometry mesh. */
-const EMOJI_IMAGE_GLYPHS = ['⭐', '❤️', '🌈', '🍕'];
-
-function createEmojiImage(bounds) {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
-
-  const ctx = canvas.getContext('2d');
-  const glyph = EMOJI_IMAGE_GLYPHS[Math.floor(Math.random() * EMOJI_IMAGE_GLYPHS.length)];
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = '190px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
-  ctx.fillText(glyph, canvas.width / 2, canvas.height / 2);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  const geometry = new THREE.PlaneGeometry(1.05, 1.05);
-  const material = new THREE.MeshBasicMaterial({
-    map: texture,
-    transparent: true,
-    side: THREE.DoubleSide,
-    depthWrite: false,
-  });
-  const mesh = new THREE.Mesh(geometry, material);
-  const intent = `emoji ${glyph}`;
-  const geoName = 'emoji';
-
-  mesh.position.set(
-    (Math.random() - 0.5) * bounds.x * 0.8,
-    (Math.random() - 0.5) * bounds.y * 0.8,
-    (Math.random() - 0.5) * bounds.z * 0.6,
-  );
-  mesh.rotation.set(
-    Math.random() * Math.PI * 2,
-    Math.random() * Math.PI * 2,
-    Math.random() * Math.PI * 2,
-  );
-  mesh.userData.intent  = intent;
-  mesh.userData.geoName = geoName;
-  mesh.userData.emojiGlyph = glyph;
-
-  return { mesh, intent, geoName };
-}
 
 
 /* COW FACTORY -- createCow(bounds)
@@ -1514,23 +1454,6 @@ const THEMES = {
     document.getElementById('btn-add').disabled = shapes.length >= MAX_SHAPES;
   }
 
-  function spawnEmojiImage() {
-    if (shapes.length >= MAX_SHAPES) return;
-
-    const { mesh, intent, geoName } = createEmojiImage(BOUNDS);
-
-    scene.add(mesh);
-    shapes.push(mesh);
-    intentEngine.assign(mesh, intent);
-    createLabel(mesh);
-
-    incrementTypeCount(geoName);
-
-    updateShapeCount();
-    updateRemoveButton();
-    updateAddButton();
-  }
-
   /* ── Spawn a shape ──────────────────────────────────────────────────────── */
   function spawnShape() {
     if (shapes.length >= MAX_SHAPES) return;
@@ -1555,12 +1478,12 @@ const THEMES = {
         [available[i], available[j]] = [available[j], available[i]];
       }
       if (available.length > 0) {
-        if (available[0] === 'cow')   { spawnCow();   spawnEmojiImage(); return; }
-        if (available[0] === 'clown') { spawnClown(); spawnEmojiImage(); return; }
-        if (available[0] === 'baby')  { spawnBaby();  spawnEmojiImage(); return; }
-        if (available[0] === 'car')   { spawnCar();   spawnEmojiImage(); return; }
-        if (available[0] === 'leaf')  { spawnLeaf();  spawnEmojiImage(); return; }
-        if (available[0] === 'tree')  { spawnTree();  spawnEmojiImage(); return; }
+        if (available[0] === 'cow')   { spawnCow();   return; }
+        if (available[0] === 'clown') { spawnClown(); return; }
+        if (available[0] === 'baby')  { spawnBaby();  return; }
+        if (available[0] === 'car')   { spawnCar();   return; }
+        if (available[0] === 'leaf')  { spawnLeaf();  return; }
+        if (available[0] === 'tree')  { spawnTree();  return; }
       }
       // All specials already live — fall through to a normal shape.
     }
@@ -1577,8 +1500,6 @@ const THEMES = {
     updateShapeCount();
     updateRemoveButton();
     updateAddButton();
-
-    spawnEmojiImage();
   }
 
   function spawnCow() {

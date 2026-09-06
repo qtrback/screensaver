@@ -53,7 +53,7 @@ assertMatches(/function showTreeMessage\(\) \{[\s\S]*?el\.className = 'cow-messa
 assertMatches(/child\.material\.userData\.treePart[\s\S]*?const part = child\.material\.userData\.treePart;[\s\S]*?const hex = theme\.treeColors\[part\];[\s\S]*?child\.material\.color\.setHex\(hex\);/, 'recolorLiveShapes has a treePart branch');
 
 assertContains("if (!treeActive())  available.push('tree');", 'spawnShape only offers tree when no tree is active');
-assertContains("if (available[0] === 'tree')  { spawnTree();  spawnEmojiImage(); return; }", 'spawnShape dispatches tree through the shuffled available list and pairs it with an emoji image');
+assertContains("if (available[0] === 'tree')  { spawnTree();  return; }", 'spawnShape dispatches tree through the shuffled available list');
 assertContains('const COW_CHANCE = 0.12;', 'COW_CHANCE remains unchanged');
 
 const removeShapeStart = source.indexOf('function removeShape(mesh) {');
