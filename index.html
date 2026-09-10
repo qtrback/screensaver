@@ -1976,6 +1976,13 @@ const THEMES = {
     let lastTime = performance.now();
 
     function tick(now) {
+      if (document.hidden) {
+        scene.remove(points);
+        geometry.dispose();
+        material.dispose();
+        return;
+      }
+
       const dt = Math.min((now - lastTime) / 1000, 0.1);
       lastTime = now;
       elapsed += dt;

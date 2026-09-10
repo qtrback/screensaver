@@ -138,4 +138,21 @@ engine.update([frozenMesh, movingMesh], { x: 100, y: 100, z: 100 }, 1);
 assert.deepStrictEqual(frozenMesh.position, { x: 1, y: 2, z: 3 }, 'unfrozen shape resumes from retained velocity');
 assert.strictEqual(frozenState.vel, retainedVelocity, 'unfreeze does not replace velocity');
 
+// Main-loop visibility gate: paused is seeded from document.hidden, flipped
+// by the visibilitychange listener, and gates the frame body before render.
+const pausedInitIdx = source.indexOf('let paused = document.hidden;');
+const animateRenderIdx = source.indexOf('renderer.render(scene, camera)', pausedInitIdx);
+assert(pausedInitIdx !== -1 && animateRenderIdx !== -1, 'paused init and animate render call exist');
+const mainLoopSource = source.slice(pausedInitIdx, animateRenderIdx);
+assert(mainLoopSource.includes('let paused = document.hidden;'), 'paused flag is seeded from document.hidden');
+assert(mainLoopSource.includes('if (paused) return;'), 'animate early-returns when paused, before renderer.render');
+assertMatches(/if \(document\.hidden\) \{\s*paused = true;/, 'visibilitychange listener sets paused = true when hidden');
+
+// Burst visibility gate: tick tears down (hidden check -> dispose -> return)
+// before it would otherwise reschedule requestAnimationFrame(tick).
+assert(
+  /document\.hidden\) \{\s*scene\.remove\(points\);\s*geometry\.dispose\(\);\s*material\.dispose\(\);\s*return;\s*\}[\s\S]*?requestAnimationFrame\(tick\);/.test(spawnBurstSource),
+  'burst tick disposes scene/geometry/material and returns on document.hidden before its requestAnimationFrame(tick) reschedule'
+);
+
 console.log('freeze static and behavior checks passed');
