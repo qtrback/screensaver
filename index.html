@@ -2188,6 +2188,17 @@ const THEMES = {
 
     if (paused) return;
 
+    // Reduced-motion guard: when the OS requests reduced motion we render the
+    // scene ONCE so the shapes stay drawn and visible, but suppress every
+    // state advance below (camera orbit, intent tick, labels, mood drift).
+    // Re-read the media query each frame (do NOT cache at boot) so a mid-session
+    // flip of the system setting takes effect live, both ways, with no reload.
+    // matchMedia absent (old/headless env) is treated as "no reduced motion".
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      renderer.render(scene, camera); // render-then-hold, not a black-screen early return
+      return;
+    }
+
     const dt = Math.min(clock.getDelta(), 0.1); // cap dt to avoid spiral on tab switch
 
     /* Camera gentle orbit */
