@@ -1976,6 +1976,10 @@ const THEMES = {
     let lastTime = performance.now();
 
     function tick(now) {
+      if (paused) {
+        requestAnimationFrame(tick);   // stay scheduled, but do nothing this frame
+        return;
+      }
       const dt = Math.min((now - lastTime) / 1000, 0.1);
       lastTime = now;
       elapsed += dt;
