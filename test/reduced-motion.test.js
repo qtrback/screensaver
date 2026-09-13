@@ -20,6 +20,7 @@ const animateSource = source.slice(animateStart, animateEnd);
 // live flip. `reload()` resets the recorders so each frame is measured clean.
 function makeContext(matchMediaState) {
   const calls = { update: 0, render: 0, lookAt: 0, resolveCollisions: 0, setHSL: 0 };
+  const STAR_TWINKLE_REST_OPACITY = 0.8;
   const context = {
     Math,
     requestAnimationFrame: () => {}, // no-op: must not recurse
@@ -34,6 +35,10 @@ function makeContext(matchMediaState) {
     labels: [],
     moodTime: 0,
     camAngle: 0,
+    STAR_TWINKLE_REST_OPACITY,
+    STAR_TWINKLE_AMPLITUDE: 0.2,
+    starTwinkleTime: 0,
+    starMat: { color: { setHex() {}, setHSL() {} }, opacity: STAR_TWINKLE_REST_OPACITY, map: {} },
     THEMES: { dark: { fillMoodHSL: { s: 0.5, l: 0.5 } } },
     activeTheme: 'dark',
     fillLight: { color: { setHSL: () => { calls.setHSL++; } } },
@@ -51,8 +56,9 @@ function makeContext(matchMediaState) {
 
 // ── Assertion group 1: reduced-motion ON ────────────────────────────────────
 {
-  const { calls, run } = makeContext({ matches: true });
+  const { context, calls, run } = makeContext({ matches: true });
   run();
+  assert.strictEqual(context.starMat.opacity, context.STAR_TWINKLE_REST_OPACITY, 'reduced-motion ON: star twinkle opacity must hold at rest');
   assert.strictEqual(calls.update, 0, 'reduced-motion ON: intentEngine.update must NOT be called (state must not advance)');
   assert.strictEqual(calls.lookAt, 0, 'reduced-motion ON: camera orbit (lookAt) must not run');
   assert.strictEqual(calls.resolveCollisions, 0, 'reduced-motion ON: resolveCollisions must not run');
@@ -63,8 +69,9 @@ function makeContext(matchMediaState) {
 
 // ── Assertion group 2: reduced-motion OFF ───────────────────────────────────
 {
-  const { calls, run } = makeContext({ matches: false });
+  const { context, calls, run } = makeContext({ matches: false });
   run();
+  assert.notStrictEqual(context.starMat.opacity, context.STAR_TWINKLE_REST_OPACITY, 'reduced-motion OFF: star twinkle opacity advances away from rest');
   assert.strictEqual(calls.update, 1, 'reduced-motion OFF: intentEngine.update WAS called (state advances)');
   assert.strictEqual(calls.render, 1, 'reduced-motion OFF: renderer.render was called');
 }
