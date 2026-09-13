@@ -1337,16 +1337,39 @@ const THEMES = {
   const BOUNDS = { x: 8, y: 5, z: 5 };
 
   /* ── Background star field ──────────────────────────────────────────────── */
+  const STAR_TWINKLE_REST_OPACITY = 0.8;
+  const STAR_TWINKLE_AMPLITUDE = 0.2;
   let starMat;
+  let starTwinkleTime = 0;
   (function addStars() {
     const count = 600;
     const positions = new Float32Array(count * 3);
     for (let i = 0; i < count * 3; i++) {
       positions[i] = (Math.random() - 0.5) * 120;
     }
+    const haloCanvas = document.createElement('canvas');
+    haloCanvas.width = 64;
+    haloCanvas.height = 64;
+    const haloCtx = haloCanvas.getContext('2d');
+    const haloGradient = haloCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    haloGradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    haloGradient.addColorStop(0.35, 'rgba(255, 255, 255, 0.65)');
+    haloGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    haloCtx.fillStyle = haloGradient;
+    haloCtx.fillRect(0, 0, 64, 64);
+    const starHaloTexture = new THREE.CanvasTexture(haloCanvas);
+
     const starGeo = new THREE.BufferGeometry();
     starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.12, sizeAttenuation: true });
+    starMat = new THREE.PointsMaterial({
+      color: 0xffffff,
+      map: starHaloTexture,
+      opacity: STAR_TWINKLE_REST_OPACITY,
+      size: 0.12,
+      sizeAttenuation: true,
+      transparent: true,
+      depthWrite: false,
+    });
     scene.add(new THREE.Points(starGeo, starMat));
   })();
 
@@ -2190,7 +2213,7 @@ const THEMES = {
 
     // Reduced-motion guard: when the OS requests reduced motion we render the
     // scene ONCE so the shapes stay drawn and visible, but suppress every
-    // state advance below (camera orbit, intent tick, labels, mood drift).
+    // state advance below (star twinkle, camera orbit, intent tick, labels, mood drift).
     // Re-read the media query each frame (do NOT cache at boot) so a mid-session
     // flip of the system setting takes effect live, both ways, with no reload.
     // matchMedia absent (old/headless env) is treated as "no reduced motion".
@@ -2200,6 +2223,10 @@ const THEMES = {
     }
 
     const dt = Math.min(clock.getDelta(), 0.1); // cap dt to avoid spiral on tab switch
+
+    /* Star field twinkle — sits below reduced-motion guard so held frames keep rest opacity. */
+    starTwinkleTime += dt;
+    starMat.opacity = STAR_TWINKLE_REST_OPACITY + Math.sin(starTwinkleTime * 1.7) * STAR_TWINKLE_AMPLITUDE;
 
     /* Camera gentle orbit */
     camAngle += dt * 0.04;
