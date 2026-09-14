@@ -34,9 +34,11 @@ const dblclickHandlerStart = clickSource.indexOf("renderer.domElement.addEventLi
 const singleClickHandlerStart = clickSource.indexOf("renderer.domElement.addEventListener('click'");
 assert(pickShapeStart !== -1 && dblclickHandlerStart !== -1 && singleClickHandlerStart !== -1, 'pickShape plus dblclick and click handlers exist');
 assert(pickShapeStart < dblclickHandlerStart && dblclickHandlerStart < singleClickHandlerStart, 'shape picking is shared before separate gesture handlers');
+const shapeMenuStart = clickSource.indexOf('let shapeMenu = null;', singleClickHandlerStart);
+const singleClickHandlerEnd = shapeMenuStart === -1 ? clickSource.length : shapeMenuStart;
 const pickShapeSource = clickSource.slice(pickShapeStart, dblclickHandlerStart);
 const dblclickSource = clickSource.slice(dblclickHandlerStart, singleClickHandlerStart);
-const singleClickSource = clickSource.slice(singleClickHandlerStart);
+const singleClickSource = clickSource.slice(singleClickHandlerStart, singleClickHandlerEnd);
 
 assert(pickShapeSource.includes('if (event.target !== renderer.domElement) return null;'), 'shared pickShape guard ignores non-canvas events');
 assert(pickShapeSource.includes('raycaster.intersectObjects(shapes, true)'), 'shared pickShape raycasts against all shape descendants');
