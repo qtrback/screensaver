@@ -195,6 +195,93 @@
       z-index: 50;
     }
 
+    .shape-menu {
+      position: fixed;
+      min-width: 150px;
+      padding: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 12px;
+      background: rgba(12, 12, 18, 0.88);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+      z-index: 200;
+    }
+
+    .shape-menu button {
+      font: inherit;
+    }
+
+    .shape-menu-action {
+      display: block;
+      width: 100%;
+      border: 0;
+      border-radius: 8px;
+      padding: 7px 9px;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.86);
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      text-align: left;
+      text-transform: lowercase;
+      cursor: pointer;
+    }
+
+    .shape-menu-action:hover,
+    .shape-menu-action:focus-visible {
+      background: rgba(255, 255, 255, 0.13);
+      color: #fff;
+      outline: none;
+    }
+
+    .shape-menu-palette {
+      display: grid;
+      grid-template-columns: repeat(5, 20px);
+      gap: 7px;
+      margin-top: 7px;
+      padding: 7px 2px 2px;
+      border-top: 1px solid rgba(255, 255, 255, 0.14);
+    }
+
+    .shape-menu-swatch {
+      width: 20px;
+      height: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.55);
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+    }
+
+    .shape-menu-swatch:hover,
+    .shape-menu-swatch:focus-visible {
+      transform: scale(1.16);
+      outline: 2px solid rgba(255, 255, 255, 0.9);
+      outline-offset: 2px;
+    }
+
+    body.theme-light .shape-menu {
+      border-color: rgba(20, 18, 14, 0.22);
+      background: rgba(255, 255, 255, 0.88);
+      box-shadow: 0 12px 32px rgba(20, 18, 14, 0.2);
+    }
+
+    body.theme-light .shape-menu-action {
+      color: rgba(20, 18, 14, 0.86);
+    }
+
+    body.theme-light .shape-menu-action:hover,
+    body.theme-light .shape-menu-action:focus-visible {
+      background: rgba(20, 18, 14, 0.1);
+      color: #14120e;
+    }
+
+    body.theme-light .shape-menu-palette {
+      border-top-color: rgba(20, 18, 14, 0.14);
+    }
+
+    body.theme-light .shape-menu-swatch {
+      border-color: rgba(20, 18, 14, 0.45);
+    }
+
     /* ── Light theme overrides ──────────────────────────────────────────
        Applied via body.theme-light, toggled at runtime by JS. Dark theme
        (the default, unconditional on load) is everything above, untouched. */
@@ -2072,6 +2159,129 @@ const THEMES = {
       // Plain click: freeze toggle.
       intentEngine.toggleFrozen(target);
     }
+  });
+
+  let shapeMenu = null;
+
+  function closeShapeMenu() {
+    if (shapeMenu) {
+      shapeMenu.remove();
+      shapeMenu = null;
+    }
+  }
+
+  function positionShapeMenu(menu, x, y) {
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+    requestAnimationFrame(() => {
+      const rect = menu.getBoundingClientRect();
+      const left = Math.min(x, window.innerWidth - rect.width - 8);
+      const top = Math.min(y, window.innerHeight - rect.height - 8);
+      menu.style.left = `${Math.max(8, left)}px`;
+      menu.style.top = `${Math.max(8, top)}px`;
+    });
+  }
+
+  function recolorShapeFromMenu(obj, hex) {
+    if (obj.isGroup) {
+      obj.traverse(child => {
+        if (child.material && child.material.color) {
+          child.material.color.setHex(hex);
+        }
+      });
+    } else if (obj.material && obj.material.color) {
+      obj.material.color.setHex(hex);
+    }
+  }
+
+  function addShapeMenuAction(menu, label, onClick) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'shape-menu-action';
+    button.textContent = label;
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      onClick(event);
+    });
+    menu.appendChild(button);
+    return button;
+  }
+
+  function showShapePalette(menu, target) {
+    const existingPalette = menu.querySelector('.shape-menu-palette');
+    if (existingPalette) existingPalette.remove();
+
+    const palette = THEMES[activeTheme].palette;
+    const swatches = document.createElement('div');
+    swatches.className = 'shape-menu-palette';
+
+    palette.forEach(hex => {
+      const swatch = document.createElement('button');
+      const cssColor = `#${hex.toString(16).padStart(6, '0')}`;
+      swatch.type = 'button';
+      swatch.className = 'shape-menu-swatch';
+      swatch.style.background = cssColor;
+      swatch.setAttribute('aria-label', `change color to ${cssColor}`);
+      swatch.addEventListener('click', (event) => {
+        event.stopPropagation();
+        recolorShapeFromMenu(target, hex);
+        closeShapeMenu();
+      });
+      swatches.appendChild(swatch);
+    });
+
+    menu.appendChild(swatches);
+  }
+
+  function openShapeMenu(target, x, y) {
+    closeShapeMenu();
+
+    const menu = document.createElement('div');
+    menu.className = 'shape-menu';
+    menu.addEventListener('click', (event) => event.stopPropagation());
+    menu.addEventListener('contextmenu', (event) => event.preventDefault());
+
+    addShapeMenuAction(menu, 'delete', () => {
+      const burstPosition = target.getWorldPosition(new THREE.Vector3());
+      spawnBurst(burstPosition);
+      removeShape(target);
+      closeShapeMenu();
+    });
+
+    addShapeMenuAction(menu, 'freeze', () => {
+      intentEngine.toggleFrozen(target);
+      closeShapeMenu();
+    });
+
+    addShapeMenuAction(menu, 'change color', () => {
+      showShapePalette(menu, target);
+    });
+
+    document.body.appendChild(menu);
+    shapeMenu = menu;
+    positionShapeMenu(menu, x, y);
+  }
+
+  renderer.domElement.addEventListener('contextmenu', (event) => {
+    event.preventDefault();
+    const target = pickShape(event);
+    if (!target) {
+      closeShapeMenu();
+      return;
+    }
+    openShapeMenu(target, event.clientX, event.clientY);
+  });
+
+  document.addEventListener('click', () => {
+    if (shapeMenu) closeShapeMenu();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && shapeMenu) closeShapeMenu();
+  });
+
+  window.addEventListener('scroll', () => {
+    if (shapeMenu) closeShapeMenu();
   });
 
   function resolveCollisions() {
