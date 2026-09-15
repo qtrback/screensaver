@@ -1,0 +1,9 @@
+{
+  "name": "screensaver",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vanilla-JS Three.js screensaver with floating shape easter eggs.",
+  "scripts": {
+    "test": "node test/flying-car.test.js"
+  }
+}
