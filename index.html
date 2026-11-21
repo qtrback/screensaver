@@ -77,6 +77,20 @@
 
     #type-counts:empty { display: none; }
 
+    /* Version label (bottom-left; outside #ui so it never hides with the idle timer) */
+    #version-label {
+      position: fixed;
+      bottom: 24px;
+      left: 24px;
+      font-size: 10px;
+      letter-spacing: 0.05em;
+      color: rgba(255, 255, 255, 0.4);
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-select: none;
+      z-index: 100;
+    }
+
     .type-count-row {
       font-size: 12px;
       font-weight: 500;
@@ -348,6 +362,10 @@
       background: rgba(255, 255, 255, 0.85);
       border: 1px solid rgba(20, 18, 14, 0.2);
     }
+
+    body.theme-light #version-label {
+      color: rgba(20, 18, 14, 0.4);
+    }
   </style>
 </head>
 <body>
@@ -365,6 +383,9 @@
   <button id="btn-remove" title="Remove shape">&#x2212;</button>
   <button id="btn-add" title="Add shape">+</button>
 </div>
+
+<!-- App version (must equal "v" + package.json version; checked by test/version-label.test.js) -->
+<div id="version-label">v1.0.0</div>
 
 <!-- Three.js from CDN -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
